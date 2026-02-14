@@ -82,6 +82,9 @@ const getShortCode = (url: string) => {
 export class BackendService {
   public supabase: any = null;
   public useSupabase = false;
+  
+  // CACHE: Source of truth for the UI session to ensure instant updates
+  private _partnershipsCache: Partnership[] | null = null;
 
   constructor() {
     this.initSupabase();
@@ -166,6 +169,7 @@ export class BackendService {
 
   logout() {
     localStorage.removeItem(STORAGE_KEYS.USER);
+    this._partnershipsCache = null;
     if (this.useSupabase) this.supabase.auth.signOut();
   }
 
@@ -281,15 +285,33 @@ export class BackendService {
   // --- PARTNERSHIPS & TRACKING ---
 
   async getPartnerships(): Promise<Partnership[]> {
-    if (this.useSupabase) {
-        const { data } = await this.supabase.from('partnerships').select('*').order('postedDate', { ascending: false });
-        return data || [];
+    // 1. Return in-memory cache if available (Fastest UI updates)
+    if (this._partnershipsCache) {
+      return this._partnershipsCache;
     }
-    const raw = localStorage.getItem(STORAGE_KEYS.PARTNERSHIPS);
-    return raw ? JSON.parse(raw) : [];
+
+    // 2. Fetch from DB or Local Storage
+    let data: Partnership[] = [];
+    if (this.useSupabase) {
+        const { data: dbData } = await this.supabase.from('partnerships').select('*').order('postedDate', { ascending: false });
+        data = dbData || [];
+    } else {
+        const raw = localStorage.getItem(STORAGE_KEYS.PARTNERSHIPS);
+        data = raw ? JSON.parse(raw) : [];
+    }
+    
+    // 3. Populate Cache
+    this._partnershipsCache = data;
+    return data;
   }
 
   async savePartnership(p: Partnership): Promise<Partnership[]> {
+    // Update local cache immediately
+    const current = await this.getPartnerships();
+    const updated = [p, ...current.filter(i => i.id !== p.id)];
+    this._partnershipsCache = updated;
+
+    // Persist in background
     if (this.useSupabase) {
          try {
              const { data: userData } = await this.supabase.auth.getUser();
@@ -300,11 +322,9 @@ export class BackendService {
                  });
              }
          } catch(e) { console.log('Supabase table missing') }
-         return this.getPartnerships();
     }
-    const current = await this.getPartnerships();
-    const updated = [p, ...current.filter(i => i.id !== p.id)];
     localStorage.setItem(STORAGE_KEYS.PARTNERSHIPS, JSON.stringify(updated));
+    
     return updated;
   }
 
@@ -357,7 +377,6 @@ export class BackendService {
   /**
    * REFRESH PARTNERSHIPS
    * Triggers Apify extraction for all active deals
-   * @param manualPartnerships Optional list of partnerships to use instead of fetching (prevents race conditions)
    */
   async refreshPartnershipStats(manualPartnerships?: Partnership[]) {
       const partnerships = manualPartnerships || await this.getPartnerships();
@@ -373,8 +392,7 @@ export class BackendService {
       }
 
       try {
-          // DIRECT APIFY CALL (Client-side)
-          // Using verified input structure
+          // DIRECT APIFY CALL
           const actorInput = {
             "includeDownloadedVideo": false,
             "includeSharesCount": true,
@@ -385,22 +403,16 @@ export class BackendService {
             "username": videoUrls // Array of Video URLs
           };
 
-          // Use the helper directly
           console.log("Starting Apify Extraction for:", videoUrls);
           const run = await apifyRequest(`acts/apify~instagram-reel-scraper/runs`, 'POST', actorInput);
           console.log("Extraction started:", run.data.id);
           
+          // DO NOT AWAIT - let polling happen in background but update cache when done
           this.pollPartnershipUpdate(run.data.id);
           return true;
       } catch(e: any) {
           console.error("Partnership Refresh Failed:", e.message);
-          // Fallback: Mock random update if backend fails
-          const updated = partnerships.map(p => ({
-              ...p,
-              views: p.views + Math.floor(Math.random() * 500)
-          }));
-          updated.forEach(p => this.savePartnership(p));
-          return updated;
+          return false;
       }
   }
 
@@ -408,9 +420,10 @@ export class BackendService {
   private async pollPartnershipUpdate(runId: string) {
       try {
           const run = await apifyRequest(`acts/apify~instagram-reel-scraper/runs/${runId}`);
+          
           if (run.data.status === 'SUCCEEDED') {
              const items = await apifyRequest(`datasets/${run.data.defaultDatasetId}/items`);
-             console.log("Extraction Succeeded. Items:", items.length);
+             console.log("Extraction Succeeded. Items Recieved:", items); // LOG FOR DEBUGGING
              await this.updatePartnershipsFromApify(items);
           } else if (['RUNNING', 'READY', 'CREATING'].includes(run.data.status)) {
              // Continue polling every 5s
@@ -423,27 +436,24 @@ export class BackendService {
 
   // Maps Apify results back to Partnerships based on URL or ShortCode
   private async updatePartnershipsFromApify(items: any[]) {
-      const current = await this.getPartnerships();
-      console.log("Mapping results to", current.length, "partnerships");
+      // 1. Get current state (use Cache if available for speed)
+      const current = this._partnershipsCache || await this.getPartnerships();
+      console.log("Mapping Apify Results to", current.length, "partnerships");
 
       const updated = current.map(p => {
           const pShortCode = getShortCode(p.videoUrl);
           
           // Match logic: Try ShortCode first (Reliable), then URL exact match
           const match = items.find((i: any) => {
-              // 1. Try ShortCode (Handles ?hl=en and other query params automatically)
               if (pShortCode && i.shortCode && i.shortCode === pShortCode) return true;
               if (pShortCode && i.url && i.url.includes(pShortCode)) return true;
-
-              // 2. Try Exact Input URL match (Backup)
               if (i.inputUrl === p.videoUrl) return true;
               if (i.url === p.videoUrl) return true;
-              
               return false;
           });
 
           if (match) {
-              console.log("Matched:", p.videoUrl, "with", match.url);
+              console.log("MATCH FOUND for", p.videoUrl, "-> Views:", match.videoPlayCount);
               return {
                   ...p,
                   // Prioritize videoPlayCount (Reel Plays) over videoViewCount
@@ -456,23 +466,24 @@ export class BackendService {
           return p;
       });
       
-      // Save updated list
+      // 2. CRITICAL: Update Cache INSTANTLY so UI sees it
+      this._partnershipsCache = updated;
+      console.log("Cache updated. New State:", updated);
+
+      // 3. Persist to DB/Storage in background
       if (this.useSupabase) {
            const { data: userData } = await this.supabase.auth.getUser();
            if (userData?.user) {
-             const { error } = await this.supabase.from('partnerships').upsert(
+             await this.supabase.from('partnerships').upsert(
                  updated.map((p: Partnership) => ({ ...p, user_id: userData.user.id }))
              );
            }
       } 
       localStorage.setItem(STORAGE_KEYS.PARTNERSHIPS, JSON.stringify(updated));
-      console.log("Partnerships updated successfully.");
   }
 
   /**
    * REFRESH DATA SIMULATION
-   * 1. Fetches App Store Data
-   * 2. Fetches Video Stats from Apify
    */
   async fetchAppStoreStats(range: DateRange = '30d'): Promise<DailyMetric[]> {
       const days = range === '7d' ? 7 : range === '90d' ? 90 : range === 'all' ? 365 : 30;
@@ -481,7 +492,6 @@ export class BackendService {
       const data: DailyMetric[] = [];
       const today = new Date();
 
-      // Pseudo-random generator for stable mock charts
       const stableRandom = (input: string) => {
           let hash = 0;
           for (let i = 0; i < input.length; i++) {
@@ -491,33 +501,27 @@ export class BackendService {
           return Math.abs(hash);
       }
 
-      // Generate daily data
       for (let i = days; i >= 0; i--) {
           const date = new Date(today);
           date.setDate(date.getDate() - i);
           const dateStr = date.toISOString().split('T')[0];
           
-          // Stable mock organic baseline
           const seed = stableRandom(dateStr);
           let dailyInstalls = 45 + (seed % 20); 
           let dailyViews = 0;
 
-          // Check for Creator Drops
           partnerships.forEach(p => {
              const pDate = new Date(p.postedDate);
              const pDateStr = pDate.toISOString().split('T')[0];
 
-             // If this specific day IS the post day, add the view count to the chart data
              if (dateStr === pDateStr) {
-                 dailyViews += p.views; // Real views (starts at 0)
+                 dailyViews += p.views;
              }
 
-             // Correlation Logic: Boost installs if recently posted
              const diffTime = Math.abs(date.getTime() - pDate.getTime());
              const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); 
              
              if (date >= pDate && diffDays <= 7) {
-                 // Simulate lift based on view count (or mock if 0)
                  const impact = p.views > 0 ? Math.ceil(p.views / 200) : 50; 
                  const boost = Math.floor(impact / (diffDays + 1)); 
                  dailyInstalls += boost;

@@ -50,48 +50,32 @@ export const TrackView = () => {
 
   const handleRefresh = async () => {
       setRefreshing(true);
-      // Pass the current state to backend to prevent DB fetch race conditions
       await backend.refreshPartnershipStats(partnerships);
       
-      // Poll for updates for 20 seconds
+      // Poll backend cache every 2 seconds to catch the update
       const interval = setInterval(async () => {
           const fresh = await backend.getPartnerships();
-          setPartnerships(fresh);
+          setPartnerships([...fresh]); // Spread to force React re-render
+          
           const freshMetrics = await backend.fetchAppStoreStats(dateRange);
           setMetrics(freshMetrics);
-      }, 4000);
+      }, 2000);
 
+      // Stop polling after 45 seconds
       setTimeout(() => { 
           clearInterval(interval); 
           setRefreshing(false);
-          loadData(); 
-      }, 20000);
+      }, 45000);
   }
 
   const handleSavePartnership = async (p: Partnership) => {
-      // 1. Save new deal to DB
-      await backend.savePartnership(p);
+      // 1. Save new deal to Backend (Updates cache immediately)
+      const updatedList = await backend.savePartnership(p);
       setShowAddModal(false);
-      
-      // Update local state immediately
-      const updatedList = [p, ...partnerships];
       setPartnerships(updatedList);
 
-      // 2. Kick off background extraction immediately with the EXPLICIT list
-      setRefreshing(true);
-      backend.refreshPartnershipStats(updatedList).then(() => {
-          // Poll local state every few seconds to see if results came in
-          const interval = setInterval(async () => {
-              const fresh = await backend.getPartnerships();
-              setPartnerships(fresh);
-              
-              // Also update chart metrics
-              const freshMetrics = await backend.fetchAppStoreStats(dateRange);
-              setMetrics(freshMetrics);
-          }, 4000);
-          
-          setTimeout(() => { clearInterval(interval); setRefreshing(false); }, 45000);
-      });
+      // 2. Auto-refresh stats
+      handleRefresh();
   };
 
   const handleSaveCreds = async (c: AppStoreCredentials) => {
