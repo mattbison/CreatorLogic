@@ -342,13 +342,20 @@ export class BackendService {
   /**
    * REFRESH PARTNERSHIPS
    * Triggers Apify extraction for all active deals
+   * @param manualPartnerships Optional list of partnerships to use instead of fetching (prevents race conditions)
    */
-  async refreshPartnershipStats() {
-      const partnerships = await this.getPartnerships();
-      if (partnerships.length === 0) return;
+  async refreshPartnershipStats(manualPartnerships?: Partnership[]) {
+      const partnerships = manualPartnerships || await this.getPartnerships();
+      if (!partnerships || partnerships.length === 0) {
+        console.warn("No partnerships to refresh");
+        return;
+      }
 
       const videoUrls = partnerships.map(p => p.videoUrl).filter(url => url && url.includes('instagram'));
-      if (videoUrls.length === 0) return;
+      if (videoUrls.length === 0) {
+        console.warn("No valid Instagram video URLs found in partnerships");
+        return;
+      }
 
       try {
           // DIRECT APIFY CALL (Client-side)
@@ -364,13 +371,14 @@ export class BackendService {
           };
 
           // Use the helper directly
+          console.log("Starting Apify Extraction for:", videoUrls);
           const run = await apifyRequest(`acts/apify~instagram-reel-scraper/runs`, 'POST', actorInput);
           console.log("Extraction started:", run.data.id);
           
           this.pollPartnershipUpdate(run.data.id);
           return true;
-      } catch(e) {
-          console.log("Refresh failed, mock update", e);
+      } catch(e: any) {
+          console.error("Partnership Refresh Failed:", e.message);
           // Fallback: Mock random update if backend fails
           const updated = partnerships.map(p => ({
               ...p,

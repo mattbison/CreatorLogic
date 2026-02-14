@@ -50,28 +50,31 @@ export const TrackView = () => {
 
   const handleRefresh = async () => {
       setRefreshing(true);
-      await backend.refreshPartnershipStats();
+      // Pass the current state to backend to prevent DB fetch race conditions
+      await backend.refreshPartnershipStats(partnerships);
+      
       // Wait a bit and then reload local data to see if any updates occurred
-      // (Though backend polling will update the storage/db eventually)
       setTimeout(loadData, 2000); 
       setRefreshing(false);
   }
 
   const handleSavePartnership = async (p: Partnership) => {
-      // 1. Save new deal
+      // 1. Save new deal to DB
       await backend.savePartnership(p);
       setShowAddModal(false);
-      setPartnerships(prev => [p, ...prev]);
+      
+      // Update local state immediately
+      const updatedList = [p, ...partnerships];
+      setPartnerships(updatedList);
 
-      // 2. Kick off background extraction immediately
+      // 2. Kick off background extraction immediately with the EXPLICIT list
       setRefreshing(true);
-      backend.refreshPartnershipStats().then(() => {
-          // Poll local state every few seconds to see if results came in from the backend polling
+      backend.refreshPartnershipStats(updatedList).then(() => {
+          // Poll local state every few seconds to see if results came in
           const interval = setInterval(async () => {
               const fresh = await backend.getPartnerships();
               setPartnerships(fresh);
           }, 4000);
-          // Stop checking after 45 seconds (enough time for Apify)
           setTimeout(() => { clearInterval(interval); setRefreshing(false); }, 45000);
       });
   };
@@ -179,8 +182,8 @@ export const TrackView = () => {
                  </div>
 
                  {/* MAIN CHART */}
-                 <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
-                    <div className="flex items-center justify-between mb-4">
+                 <div className="bg-white px-6 py-5 rounded-xl border border-slate-200 shadow-sm">
+                    <div className="flex items-center justify-between mb-1">
                         <div>
                             <h3 className="text-base font-bold text-slate-900">App Installs vs Views</h3>
                             <div className="flex items-center gap-2 mt-2">
@@ -506,10 +509,10 @@ const AddPartnershipModal = ({ onClose, onSave }: any) => {
  * Renders App Installs as a Line and Video Views as overlay circles/bars
  */
 const DualAxisChart = ({ metrics }: { metrics: DailyMetric[] }) => {
-    const width = 800;
-    const height = 160; // Significantly reduced height
-    const paddingX = 40;
-    const paddingY = 20; // Reduced vertical padding
+    const width = 1200; // Increased width for flatter aspect ratio
+    const height = 120; // Short height
+    const paddingX = 16;
+    const paddingY = 5; // Very tight vertical padding
     
     // Reverse metrics to be chronological left-to-right
     const data = useMemo(() => [...metrics].reverse(), [metrics]);
@@ -531,7 +534,7 @@ const DualAxisChart = ({ metrics }: { metrics: DailyMetric[] }) => {
 
     return (
         <div className="w-full overflow-hidden relative group/chart">
-            <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-full">
+            <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-full block">
                 
                 {/* Horizontal Grid Lines */}
                 {[0, 0.25, 0.5, 0.75, 1].map((pct, i) => {
