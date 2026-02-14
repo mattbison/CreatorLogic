@@ -20,11 +20,16 @@ import {
   LayoutGrid,
   TrendingUp,
   Share2,
-  Loader2
+  Loader2,
+  Settings,
+  X,
+  AlertCircle,
+  HelpCircle,
+  ChevronDown
 } from 'lucide-react';
 
 export const TrackView = () => {
-  const [activeTab, setActiveTab] = useState<'overview' | 'partnerships' | 'connections'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'partnerships' | 'settings'>('overview');
   const [dateRange, setDateRange] = useState<DateRange>('30d');
   
   const [partnerships, setPartnerships] = useState<Partnership[]>([]);
@@ -32,7 +37,10 @@ export const TrackView = () => {
   const [credentials, setCredentials] = useState<AppStoreCredentials | null>(null);
   
   const [showAddModal, setShowAddModal] = useState(false);
+  const [showHelp, setShowHelp] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
 
   // Load Data
   useEffect(() => {
@@ -40,78 +48,99 @@ export const TrackView = () => {
   }, [dateRange]);
 
   const loadData = async () => {
-    const p = await backend.getPartnerships();
-    const c = await backend.getAppCredentials();
-    const m = await backend.fetchAppStoreStats(dateRange);
-    
-    setPartnerships(p);
-    setCredentials(c);
-    setMetrics(m);
+    setError(null);
+    try {
+        const p = await backend.getPartnerships();
+        const c = await backend.getAppCredentials();
+        const m = await backend.fetchAppStoreStats(dateRange);
+        
+        setPartnerships(p);
+        setCredentials(c);
+        setMetrics(m);
+    } catch (err: any) {
+        console.error("Failed to load tracking data", err);
+        setError("Unable to load data. Please check your connection.");
+    } finally {
+        setLoading(false);
+    }
   };
 
   const handleRefresh = async (overrideList?: Partnership[]) => {
       setRefreshing(true);
+      setError(null);
       
-      // 1. Trigger the run (The backend handles the 'active' lock)
-      const listToRefresh = overrideList || partnerships;
-      await backend.refreshPartnershipStats(listToRefresh);
-      
-      // 2. Poll Cache for Changes
-      // We poll more frequently now to catch the exact moment data lands
-      let attempts = 0;
-      const interval = setInterval(async () => {
-          attempts++;
-          
-          // Fetch fresh data from backend cache
-          const fresh = await backend.getPartnerships();
-          
-          // Check if data has actually changed (simple view count check for now)
-          const hasChanges = fresh.some(newItem => {
-             const oldItem = listToRefresh.find(old => old.id === newItem.id);
-             return oldItem && newItem.views !== oldItem.views;
-          });
-
-          // Always update UI state to show latest
-          setPartnerships([...fresh]); 
-          const freshMetrics = await backend.fetchAppStoreStats(dateRange);
-          setMetrics(freshMetrics);
-          
-          // Stop if we see changes OR if we timeout (60s)
-          if (hasChanges || attempts > 30) {
-              // If we found changes, we can stop early, OR we can let it run 
-              // a bit longer just in case other items are still processing.
-              // For better UX, we'll keep polling until timeout to ensure full sync.
-              if (attempts > 30) {
-                  clearInterval(interval);
-                  setRefreshing(false);
-                  loadData(); // Final consistency check
-              }
-          }
-      }, 2000);
+      try {
+        // 1. Trigger the run (The backend handles the 'active' lock)
+        const listToRefresh = overrideList || partnerships;
+        const triggered = await backend.refreshPartnershipStats(listToRefresh);
+        
+        if (!triggered && !overrideList) {
+             // If false returned and we didn't force it, it might mean it's locked or empty
+             // We continue to poll anyway just in case
+        }
+        
+        // 2. Poll Cache for Changes
+        let attempts = 0;
+        const interval = setInterval(async () => {
+            attempts++;
+            
+            // Fetch fresh data from backend cache
+            const fresh = await backend.getPartnerships();
+            
+            // Check if data has actually changed
+            const hasChanges = fresh.some(newItem => {
+               const oldItem = listToRefresh.find(old => old.id === newItem.id);
+               return oldItem && newItem.views !== oldItem.views;
+            });
+  
+            // Always update UI state to show latest
+            setPartnerships([...fresh]); 
+            const freshMetrics = await backend.fetchAppStoreStats(dateRange);
+            setMetrics(freshMetrics);
+            
+            // Stop conditions
+            if (hasChanges || attempts > 30) {
+                if (attempts > 30) {
+                    clearInterval(interval);
+                    setRefreshing(false);
+                }
+            }
+        }, 2000);
+      } catch (err: any) {
+          setError("Failed to sync with Instagram. Please try again later.");
+          setRefreshing(false);
+      }
   }
 
   const handleSavePartnership = async (p: Partnership) => {
-      // 1. Save new deal to Backend (Updates cache immediately with 0 views)
-      const updatedList = await backend.savePartnership(p);
-      setShowAddModal(false);
-      
-      // 2. Update local UI immediately so user sees the row
-      setPartnerships(updatedList);
-
-      // 3. Trigger Apify Run with the UPDATED list
-      handleRefresh(updatedList);
+      try {
+        // 1. Save new deal to Backend (Updates cache immediately with 0 views)
+        const updatedList = await backend.savePartnership(p);
+        setShowAddModal(false);
+        
+        // 2. Update local UI immediately
+        setPartnerships(updatedList);
+  
+        // 3. Trigger Apify Run
+        handleRefresh(updatedList);
+      } catch (err) {
+          setError("Failed to save partnership.");
+      }
   };
 
   const handleSaveCreds = async (c: AppStoreCredentials) => {
-      // Logic handled in backend service (including validation call)
-      await backend.saveAppCredentials(c);
-      const updated = await backend.getAppCredentials();
-      setCredentials(updated);
-      setActiveTab('overview');
+      try {
+        await backend.saveAppCredentials(c);
+        const updated = await backend.getAppCredentials();
+        setCredentials(updated);
+        setActiveTab('overview');
+      } catch (err) {
+          setError("Failed to verify App Store credentials.");
+      }
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 pb-20 font-sans text-slate-900">
+    <div className="min-h-screen bg-slate-50 pb-20 font-sans text-slate-900 relative">
        
        {/* PAGE HEADER */}
        <div className="bg-white border-b border-slate-200 sticky top-0 z-10 shadow-sm">
@@ -129,22 +158,11 @@ export const TrackView = () => {
                 </div>
                 
                 <div className="flex items-center gap-3">
-                    {/* Date Range Picker (Only on Overview) */}
-                    {activeTab === 'overview' && (
-                        <div className="hidden md:flex items-center bg-white border border-slate-200 rounded-lg p-1 shadow-sm">
-                            <DateRangeBtn active={dateRange === '7d'} onClick={() => setDateRange('7d')} label="7D" />
-                            <DateRangeBtn active={dateRange === '30d'} onClick={() => setDateRange('30d')} label="30D" />
-                            <DateRangeBtn active={dateRange === '90d'} onClick={() => setDateRange('90d')} label="90D" />
-                        </div>
-                    )}
-
-                    <div className="h-6 w-px bg-slate-200 mx-2 hidden md:block"></div>
-
                     {/* Nav Tabs */}
                     <div className="flex bg-slate-100 p-1 rounded-lg">
                         <TabButton active={activeTab === 'overview'} onClick={() => setActiveTab('overview')} label="Analytics" icon={<BarChart3 size={14}/>} />
                         <TabButton active={activeTab === 'partnerships'} onClick={() => setActiveTab('partnerships')} label="Deals" icon={<DollarSign size={14}/>} />
-                        <TabButton active={activeTab === 'connections'} onClick={() => setActiveTab('connections')} label="Codes" icon={<Smartphone size={14}/>} />
+                        <TabButton active={activeTab === 'settings'} onClick={() => setActiveTab('settings')} label="Settings" icon={<Settings size={14}/>} />
                     </div>
                 </div>
              </div>
@@ -158,18 +176,41 @@ export const TrackView = () => {
              <div className="space-y-8 animate-fade-in-up">
                  
                  {/* Install Tracking Info Banner */}
-                 <div className="bg-white border border-slate-200 rounded-xl p-4 flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-sm">
-                     <div className="flex items-start gap-3">
-                         <Info className="text-slate-400 mt-0.5" size={20} />
+                 <div className="bg-white border border-slate-200 rounded-xl p-4 flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-sm relative overflow-hidden">
+                     <div className="flex items-start gap-3 relative z-10">
+                         <div className="p-2 bg-indigo-50 text-indigo-600 rounded-lg">
+                            <Info size={20} />
+                         </div>
                          <div>
                              <h3 className="text-sm font-bold text-slate-900">Install Tracking Active</h3>
-                             <p className="text-sm text-slate-500 max-w-2xl">
+                             <p className="text-sm text-slate-500 max-w-2xl mt-1 leading-relaxed">
                                 We track both creator-attributed installs and organic installs. The "All Installs" view includes installs without creator attribution to give you complete visibility.
                              </p>
+                             
+                             {/* CONSOLIDATED DATE PICKER */}
+                             <div className="mt-4 flex items-center gap-2">
+                                <div className="relative group">
+                                    <div className="bg-white border border-slate-200 text-slate-700 px-3 py-1.5 rounded-md text-sm font-medium flex items-center gap-2 shadow-sm cursor-pointer hover:border-indigo-300 transition-colors">
+                                        <Calendar size={14} className="text-slate-400" />
+                                        <span>
+                                            {loading ? 'Loading...' : `${new Date(metrics[0]?.date || new Date()).toLocaleDateString('en-GB', {day: 'numeric', month:'short'})} - ${new Date(metrics[metrics.length-1]?.date || new Date()).toLocaleDateString('en-GB', {day: 'numeric', month: 'short', year: 'numeric'})}`}
+                                        </span>
+                                        <ChevronDown size={14} className="text-slate-400" />
+                                    </div>
+                                    {/* Dropdown Menu */}
+                                    <div className="absolute top-full left-0 mt-1 w-48 bg-white border border-slate-200 rounded-lg shadow-xl opacity-0 group-hover:opacity-100 invisible group-hover:visible transition-all z-20">
+                                        <button onClick={() => setDateRange('7d')} className={`w-full text-left px-4 py-2 text-sm hover:bg-slate-50 ${dateRange === '7d' ? 'font-bold text-indigo-600' : 'text-slate-600'}`}>Last 7 Days</button>
+                                        <button onClick={() => setDateRange('30d')} className={`w-full text-left px-4 py-2 text-sm hover:bg-slate-50 ${dateRange === '30d' ? 'font-bold text-indigo-600' : 'text-slate-600'}`}>Last 30 Days</button>
+                                        <button onClick={() => setDateRange('90d')} className={`w-full text-left px-4 py-2 text-sm hover:bg-slate-50 ${dateRange === '90d' ? 'font-bold text-indigo-600' : 'text-slate-600'}`}>Last 90 Days</button>
+                                    </div>
+                                </div>
+                             </div>
                          </div>
                      </div>
-                     <div className="flex items-center gap-3">
-                        <button className="text-slate-500 hover:text-slate-900 text-sm font-medium border border-slate-200 px-3 py-1.5 rounded-lg bg-slate-50 transition-colors">How this works</button>
+                     <div className="flex items-center gap-3 relative z-10">
+                        <button onClick={() => setShowHelp(true)} className="text-slate-500 hover:text-slate-900 text-sm font-medium border border-slate-200 px-3 py-1.5 rounded-lg bg-slate-50 transition-colors flex items-center gap-2">
+                            <HelpCircle size={16} /> How this works
+                        </button>
                         <button 
                             onClick={() => handleRefresh()}
                             disabled={refreshing}
@@ -178,14 +219,6 @@ export const TrackView = () => {
                         >
                             <RefreshCw size={18} className={refreshing ? 'animate-spin' : ''} />
                         </button>
-                     </div>
-                 </div>
-
-                 {/* Date Header */}
-                 <div className="flex items-center gap-2">
-                     <div className="bg-white border border-slate-200 text-slate-700 px-3 py-1.5 rounded-md text-sm font-medium flex items-center gap-2 shadow-sm">
-                         <Calendar size={14} className="text-slate-400" />
-                         {metrics.length > 0 ? `${new Date(metrics[0].date).toLocaleDateString('en-GB', {day: 'numeric', month:'short'})} - ${new Date(metrics[metrics.length-1].date).toLocaleDateString('en-GB', {day: 'numeric', month: 'short', year: 'numeric'})}` : 'Loading...'}
                      </div>
                  </div>
 
@@ -206,11 +239,11 @@ export const TrackView = () => {
                  </div>
 
                  {/* MAIN CHART */}
-                 <div className="bg-white px-6 py-5 rounded-xl border border-slate-200 shadow-sm">
-                    <div className="flex items-center justify-between mb-1">
+                 <div className="bg-white px-6 py-6 rounded-xl border border-slate-200 shadow-sm">
+                    <div className="flex items-center justify-between mb-4">
                         <div>
                             <h3 className="text-base font-bold text-slate-900">App Installs vs Views</h3>
-                            <div className="flex items-center gap-2 mt-2">
+                            <div className="flex items-center gap-2 mt-1">
                                 <span className="text-2xl font-normal text-slate-900">{metrics.reduce((acc, m) => acc + m.installs, 0).toLocaleString()}</span>
                                 <span className="text-sm text-slate-500">total app installs</span>
                             </div>
@@ -253,6 +286,15 @@ export const TrackView = () => {
                         </button>
                       </div>
                   </div>
+
+                  {/* ERROR ALERT */}
+                  {error && (
+                      <div className="bg-red-50 border border-red-100 text-red-700 px-4 py-3 rounded-lg flex items-center gap-3 animate-fade-in-up">
+                          <AlertCircle size={20} className="shrink-0" />
+                          <div className="flex-1 text-sm font-medium">{error}</div>
+                          <button onClick={() => setError(null)} className="text-red-400 hover:text-red-700"><X size={16}/></button>
+                      </div>
+                  )}
 
                   {/* Visual Sync Progress Bar */}
                   {refreshing && (
@@ -341,7 +383,7 @@ export const TrackView = () => {
                             {partnerships.length === 0 && (
                                 <tr>
                                     <td colSpan={9} className="p-12 text-center text-slate-500">
-                                        No active partnerships. Add one to start tracking ROI.
+                                        {loading ? <div className="flex justify-center"><Loader2 className="animate-spin text-slate-400"/></div> : 'No active partnerships. Add one to start tracking ROI.'}
                                     </td>
                                 </tr>
                             )}
@@ -351,8 +393,8 @@ export const TrackView = () => {
               </div>
           )}
 
-          {/* --- CONNECTIONS TAB (WIZARD STYLE) --- */}
-          {activeTab === 'connections' && (
+          {/* --- SETTINGS TAB (Previously Connections) --- */}
+          {activeTab === 'settings' && (
               <div className="max-w-4xl mx-auto animate-fade-in-up">
                   {credentials ? (
                     // Connected State
@@ -409,20 +451,14 @@ export const TrackView = () => {
            <AddPartnershipModal onClose={() => setShowAddModal(false)} onSave={handleSavePartnership} />
        )}
 
+       {/* HOW IT WORKS SLIDE-OVER */}
+       <HowItWorksModal isOpen={showHelp} onClose={() => setShowHelp(false)} />
+
     </div>
   );
 };
 
 // --- SUBCOMPONENTS ---
-
-const DateRangeBtn = ({ active, onClick, label }: any) => (
-    <button 
-        onClick={onClick}
-        className={`px-3 py-1 text-xs font-bold rounded-md transition-all ${active ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-500 hover:text-slate-900'}`}
-    >
-        {label}
-    </button>
-);
 
 const TabButton = ({ active, onClick, label, icon }: any) => (
     <button 
@@ -441,6 +477,59 @@ const KpiCard = ({ title, value }: any) => (
       <div className="text-3xl font-normal text-slate-900 tracking-tight">{value}</div>
     </div>
 );
+
+const HowItWorksModal = ({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) => {
+    if (!isOpen) return null;
+    return (
+        <div className="fixed inset-0 z-50 flex justify-end">
+            <div className="absolute inset-0 bg-slate-900/30 backdrop-blur-sm transition-opacity" onClick={onClose}></div>
+            <div className="w-full max-w-md bg-white h-full shadow-2xl relative animate-slide-in-right overflow-y-auto">
+                <div className="p-6 border-b border-slate-100 flex justify-between items-center sticky top-0 bg-white z-10">
+                    <h3 className="font-bold text-lg text-slate-900">How Tracking Works</h3>
+                    <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-full transition-colors"><X size={20}/></button>
+                </div>
+                <div className="p-6 space-y-8">
+                    <div className="space-y-4">
+                        <div className="w-10 h-10 bg-indigo-50 text-indigo-600 rounded-lg flex items-center justify-center">
+                            <TrendingUp size={20} />
+                        </div>
+                        <h4 className="font-bold text-slate-900">Correlation Modeling</h4>
+                        <p className="text-slate-500 text-sm leading-relaxed">
+                            Since iOS 14, exact attribution is difficult. We use correlation modeling. We take your timestamped <span className="font-semibold text-slate-700">App Store Connect</span> data and overlay it with the <span className="font-semibold text-slate-700">Video View Spikes</span> from your partner creators.
+                        </p>
+                    </div>
+                    
+                    <div className="h-px bg-slate-100 w-full"></div>
+
+                    <div className="space-y-4">
+                        <div className="w-10 h-10 bg-emerald-50 text-emerald-600 rounded-lg flex items-center justify-center">
+                            <Calendar size={20} />
+                        </div>
+                        <h4 className="font-bold text-slate-900">The 7-Day Window</h4>
+                        <p className="text-slate-500 text-sm leading-relaxed">
+                            When a Creator posts a video, we attribute organic install uplifts to that video for a rolling 7-day window. If multiple creators post at once, we weigh attribution based on view velocity.
+                        </p>
+                    </div>
+
+                    <div className="h-px bg-slate-100 w-full"></div>
+
+                    <div className="space-y-4">
+                        <div className="w-10 h-10 bg-amber-50 text-amber-600 rounded-lg flex items-center justify-center">
+                            <Lock size={20} />
+                        </div>
+                        <h4 className="font-bold text-slate-900">Privacy & Security</h4>
+                        <p className="text-slate-500 text-sm leading-relaxed">
+                            Your App Store credentials are encrypted on your device and only sent to our secure verification server once. We never store raw private keys permanently in plaintext.
+                        </p>
+                    </div>
+                </div>
+                <div className="p-6 bg-slate-50 mt-auto border-t border-slate-100">
+                    <button onClick={onClose} className="w-full bg-slate-900 text-white font-bold py-3 rounded-xl hover:bg-slate-800">Got it</button>
+                </div>
+            </div>
+        </div>
+    )
+}
 
 const AppStoreForm = ({ onSave }: { onSave: (c: AppStoreCredentials) => void }) => {
     const [data, setData] = useState<AppStoreCredentials>({
@@ -552,10 +641,11 @@ const AddPartnershipModal = ({ onClose, onSave }: any) => {
  * Renders App Installs as a Line and Video Views as overlay circles/bars
  */
 const DualAxisChart = ({ metrics }: { metrics: DailyMetric[] }) => {
-    const width = 1200; // Increased width for flatter aspect ratio
-    const height = 120; // Short height
+    // INCREASED HEIGHT AND PADDING FOR BETTER SPACING
+    const width = 1200; 
+    const height = 240; // Increased from 120 to 240
     const paddingX = 16;
-    const paddingY = 5; // Very tight vertical padding
+    const paddingY = 24; // Increased from 5 to 24
     
     // Reverse metrics to be chronological left-to-right
     const data = useMemo(() => [...metrics].reverse(), [metrics]);

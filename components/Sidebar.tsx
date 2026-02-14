@@ -65,7 +65,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           active={activeTab === 'analytics'} 
           onClick={() => onTabChange('analytics')}
           icon={<BarChart3 size={20} />}
-          label="Analytics"
+          label="Advanced Insights"
         />
         <NavButton 
           active={activeTab === 'track'} 
