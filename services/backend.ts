@@ -347,26 +347,30 @@ export class BackendService {
       const partnerships = await this.getPartnerships();
       if (partnerships.length === 0) return;
 
+      const videoUrls = partnerships.map(p => p.videoUrl).filter(url => url && url.includes('instagram'));
+      if (videoUrls.length === 0) return;
+
       try {
-          // Attempt server-side refresh
-          const res = await fetch('/api/refresh-metrics', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ 
-                  partnerships, 
-                  token: getEnvVar('VITE_APIFY_TOKEN') 
-              })
-          });
+          // DIRECT APIFY CALL (Client-side)
+          // Using strict inputs for video-only data as requested
+          const actorInput = {
+            "includeDownloadedVideo": false,
+            "includeSharesCount": true,
+            "includeTranscript": false,
+            "onlyPostsNewerThan": "2020-01-01", 
+            "resultsLimit": videoUrls.length,
+            "skipPinnedPosts": true,
+            "username": videoUrls // Array of Video URLs
+          };
+
+          // Use the helper directly
+          const run = await apifyRequest(`acts/apify~instagram-reel-scraper/runs`, 'POST', actorInput);
+          console.log("Extraction started:", run.data.id);
           
-          if(res.ok) {
-              const data = await res.json();
-              console.log("Extraction started:", data.runId);
-              // Start polling in background
-              this.pollPartnershipUpdate(data.runId);
-              return true;
-          }
+          this.pollPartnershipUpdate(run.data.id);
+          return true;
       } catch(e) {
-          console.log("Backend refresh failed, mock update");
+          console.log("Refresh failed, mock update", e);
           // Fallback: Mock random update if backend fails
           const updated = partnerships.map(p => ({
               ...p,
@@ -395,8 +399,14 @@ export class BackendService {
   private async updatePartnershipsFromApify(items: any[]) {
       const current = await this.getPartnerships();
       const updated = current.map(p => {
-          // Find item matching the video URL
-          const match = items.find((i: any) => i.url === p.videoUrl || i.url === p.videoUrl + '/' || i.url.includes(p.videoUrl));
+          // Robust matching: Check inputUrl first (Apify feature), then fallback to standard URL matching
+          const match = items.find((i: any) => 
+            (i.inputUrl && i.inputUrl === p.videoUrl) ||
+            i.url === p.videoUrl || 
+            i.url === p.videoUrl + '/' || 
+            (i.url && i.url.includes(p.videoUrl))
+          );
+
           if (match) {
               return {
                   ...p,

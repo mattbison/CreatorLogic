@@ -179,8 +179,8 @@ export const TrackView = () => {
                  </div>
 
                  {/* MAIN CHART */}
-                 <div className="bg-white px-6 py-5 rounded-xl border border-slate-200 shadow-sm">
-                    <div className="flex items-center justify-between mb-1">
+                 <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
+                    <div className="flex items-center justify-between mb-4">
                         <div>
                             <h3 className="text-base font-bold text-slate-900">App Installs vs Views</h3>
                             <div className="flex items-center gap-2 mt-2">
@@ -506,10 +506,10 @@ const AddPartnershipModal = ({ onClose, onSave }: any) => {
  * Renders App Installs as a Line and Video Views as overlay circles/bars
  */
 const DualAxisChart = ({ metrics }: { metrics: DailyMetric[] }) => {
-    const width = 1200; // Increased width for flatter aspect ratio
-    const height = 120; // Short height
-    const paddingX = 16;
-    const paddingY = 5; // Very tight vertical padding
+    const width = 800;
+    const height = 160; // Significantly reduced height
+    const paddingX = 40;
+    const paddingY = 20; // Reduced vertical padding
     
     // Reverse metrics to be chronological left-to-right
     const data = useMemo(() => [...metrics].reverse(), [metrics]);
@@ -531,7 +531,7 @@ const DualAxisChart = ({ metrics }: { metrics: DailyMetric[] }) => {
 
     return (
         <div className="w-full overflow-hidden relative group/chart">
-            <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-full block">
+            <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-full">
                 
                 {/* Horizontal Grid Lines */}
                 {[0, 0.25, 0.5, 0.75, 1].map((pct, i) => {

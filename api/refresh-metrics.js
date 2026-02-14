@@ -28,15 +28,15 @@ export default async function handler(req, res) {
             return res.status(200).json({ message: 'No valid Instagram URLs found' });
         }
 
-        // Trigger Apify Actor
+        // Trigger Apify Actor with updated params for specific video extraction
         const actorInput = {
             "includeDownloadedVideo": false,
             "includeSharesCount": true,
             "includeTranscript": false,
-            "onlyPostsNewerThan": "2024-01-01", // Default to recent
+            "onlyPostsNewerThan": "2020-01-01",
             "resultsLimit": videoUrls.length,
             "skipPinnedPosts": true,
-            "username": videoUrls // Using URLs as 'username' input per user request
+            "username": videoUrls // Array of URLs
         };
 
         const runRes = await fetch(`https://api.apify.com/v2/acts/apify~instagram-reel-scraper/runs?token=${token}`, {
