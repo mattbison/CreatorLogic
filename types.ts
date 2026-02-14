@@ -1,3 +1,4 @@
+
 export interface Creator {
   id: string;
   username: string;
@@ -74,4 +75,44 @@ export interface InstagramPost {
     artist_name: string;
     song_name: string;
   };
+}
+
+// --- NEW TRACKING TYPES ---
+
+export type DateRange = '7d' | '30d' | '90d' | 'all';
+
+export interface Partnership {
+  id: string;
+  creatorName: string;
+  videoUrl: string;
+  cost: number;
+  status: 'live' | 'scheduled' | 'draft' | 'completed';
+  postedDate: string; // ISO Date
+  platform: 'instagram' | 'tiktok' | 'youtube';
+  
+  // Performance (Fetched via Apify later)
+  views: number;
+  likes: number;
+  comments: number;
+  shares: number;
+  
+  // Computed
+  cpm?: number;
+  cpv?: number;
+}
+
+export interface AppStoreCredentials {
+  appName: string;
+  vendorNumber: string;
+  issuerId: string;
+  keyId: string;
+  privateKey: string;
+}
+
+export interface DailyMetric {
+  date: string;
+  installs: number;
+  uninstalls: number;
+  views: number; // Creator views on this day
+  retention: number;
 }

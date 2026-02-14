@@ -1,11 +1,12 @@
+
 import React, { useState, useRef, useEffect } from 'react';
 import { User } from '../types';
-import { Search, History, BarChart3, LogOut, ChevronUp, Building2 } from 'lucide-react';
+import { Search, History, BarChart3, LogOut, ChevronUp, Building2, Target } from 'lucide-react';
 
 interface SidebarProps {
   user: User;
-  activeTab: 'search' | 'history' | 'analytics' | 'agency';
-  onTabChange: (tab: 'search' | 'history' | 'analytics' | 'agency') => void;
+  activeTab: 'search' | 'history' | 'analytics' | 'agency' | 'track';
+  onTabChange: (tab: 'search' | 'history' | 'analytics' | 'agency' | 'track') => void;
   onLogout: () => void;
 }
 
@@ -65,6 +66,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
           onClick={() => onTabChange('analytics')}
           icon={<BarChart3 size={20} />}
           label="Analytics"
+        />
+        <NavButton 
+          active={activeTab === 'track'} 
+          onClick={() => onTabChange('track')}
+          icon={<Target size={20} />}
+          label="Track"
         />
         
         {/* Admin Only Tab */}

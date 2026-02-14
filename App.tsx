@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { ArrowRight, Zap, Database, Mail, AlertTriangle, ChevronDown, ChevronUp, BarChart3 } from 'lucide-react';
 import { backend } from './services/backend';
@@ -9,6 +10,7 @@ import { LandingPage } from './components/LandingPage';
 import { HistoryView } from './components/HistoryView';
 import { AnalyticsView } from './components/AnalyticsView';
 import { AgencyDashboard } from './components/AgencyDashboard';
+import { TrackView } from './components/TrackView';
 import { JobStatus, Creator, User, SearchHistoryItem, InstagramPost } from './types';
 
 function App() {
@@ -20,7 +22,7 @@ function App() {
   const [showLogin, setShowLogin] = useState(false);
 
   // App State
-  const [activeTab, setActiveTab] = useState<'search' | 'history' | 'analytics' | 'agency'>('search');
+  const [activeTab, setActiveTab] = useState<'search' | 'history' | 'analytics' | 'agency' | 'track'>('search');
   
   // Search (Discovery) State
   const [seedUsername, setSeedUsername] = useState('');
@@ -310,6 +312,9 @@ function App() {
             
             {/* --- AGENCY DASHBOARD --- */}
             {activeTab === 'agency' && <AgencyDashboard />}
+            
+            {/* --- TRACK DASHBOARD --- */}
+            {activeTab === 'track' && <TrackView />}
 
             {/* --- SEARCH TAB --- */}
             {activeTab === 'search' && (
