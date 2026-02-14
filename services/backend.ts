@@ -379,7 +379,9 @@ export class BackendService {
    * Triggers Apify extraction for all active deals
    */
   async refreshPartnershipStats(manualPartnerships?: Partnership[]) {
+      // Prioritize explicit argument (so new items are included), otherwise use cache
       const partnerships = manualPartnerships || await this.getPartnerships();
+      
       if (!partnerships || partnerships.length === 0) {
         console.warn("No partnerships to refresh");
         return;
@@ -403,9 +405,9 @@ export class BackendService {
             "username": videoUrls // Array of Video URLs
           };
 
-          console.log("Starting Apify Extraction for:", videoUrls);
+          console.log(`Starting Apify Extraction for ${videoUrls.length} URLs:`, videoUrls);
           const run = await apifyRequest(`acts/apify~instagram-reel-scraper/runs`, 'POST', actorInput);
-          console.log("Extraction started:", run.data.id);
+          console.log("Extraction started with Run ID:", run.data.id);
           
           // DO NOT AWAIT - let polling happen in background but update cache when done
           this.pollPartnershipUpdate(run.data.id);
@@ -423,7 +425,7 @@ export class BackendService {
           
           if (run.data.status === 'SUCCEEDED') {
              const items = await apifyRequest(`datasets/${run.data.defaultDatasetId}/items`);
-             console.log("Extraction Succeeded. Items Recieved:", items); // LOG FOR DEBUGGING
+             console.log("Extraction Succeeded. Items Recieved:", items);
              await this.updatePartnershipsFromApify(items);
           } else if (['RUNNING', 'READY', 'CREATING'].includes(run.data.status)) {
              // Continue polling every 5s
@@ -438,7 +440,7 @@ export class BackendService {
   private async updatePartnershipsFromApify(items: any[]) {
       // 1. Get current state (use Cache if available for speed)
       const current = this._partnershipsCache || await this.getPartnerships();
-      console.log("Mapping Apify Results to", current.length, "partnerships");
+      console.log(`Mapping ${items.length} Apify Results to ${current.length} partnerships`);
 
       const updated = current.map(p => {
           const pShortCode = getShortCode(p.videoUrl);
@@ -462,13 +464,15 @@ export class BackendService {
                   comments: match.commentsCount || p.comments,
                   shares: match.sharesCount || p.shares
               };
+          } else {
+              console.warn("No match found for", p.videoUrl, "ShortCode:", pShortCode);
           }
           return p;
       });
       
       // 2. CRITICAL: Update Cache INSTANTLY so UI sees it
       this._partnershipsCache = updated;
-      console.log("Cache updated. New State:", updated);
+      console.log("Cache updated with new metrics.");
 
       // 3. Persist to DB/Storage in background
       if (this.useSupabase) {

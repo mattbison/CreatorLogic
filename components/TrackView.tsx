@@ -48,34 +48,40 @@ export const TrackView = () => {
     setMetrics(m);
   };
 
-  const handleRefresh = async () => {
+  const handleRefresh = async (overrideList?: Partnership[]) => {
       setRefreshing(true);
-      await backend.refreshPartnershipStats(partnerships);
+      // Pass overrideList if provided (e.g., from save handler), otherwise let backend use its cache
+      const listToRefresh = overrideList || partnerships;
+      await backend.refreshPartnershipStats(listToRefresh);
       
-      // Poll backend cache every 2 seconds to catch the update
+      // Poll backend cache aggressively initially
+      let attempts = 0;
       const interval = setInterval(async () => {
+          attempts++;
           const fresh = await backend.getPartnerships();
           setPartnerships([...fresh]); // Spread to force React re-render
           
           const freshMetrics = await backend.fetchAppStoreStats(dateRange);
           setMetrics(freshMetrics);
+          
+          // Stop after 60s
+          if (attempts > 30) {
+              clearInterval(interval);
+              setRefreshing(false);
+          }
       }, 2000);
-
-      // Stop polling after 45 seconds
-      setTimeout(() => { 
-          clearInterval(interval); 
-          setRefreshing(false);
-      }, 45000);
   }
 
   const handleSavePartnership = async (p: Partnership) => {
       // 1. Save new deal to Backend (Updates cache immediately)
       const updatedList = await backend.savePartnership(p);
       setShowAddModal(false);
+      
+      // 2. Update local UI immediately (shows row with 0 views)
       setPartnerships(updatedList);
 
-      // 2. Auto-refresh stats
-      handleRefresh();
+      // 3. Trigger Apify Run with the UPDATED list explicitly to avoid stale state
+      handleRefresh(updatedList);
   };
 
   const handleSaveCreds = async (c: AppStoreCredentials) => {
@@ -147,7 +153,7 @@ export const TrackView = () => {
                      <div className="flex items-center gap-3">
                         <button className="text-slate-500 hover:text-slate-900 text-sm font-medium border border-slate-200 px-3 py-1.5 rounded-lg bg-slate-50 transition-colors">How this works</button>
                         <button 
-                            onClick={handleRefresh}
+                            onClick={() => handleRefresh()}
                             className={`p-2 rounded-lg border border-slate-200 text-slate-500 hover:text-indigo-600 hover:border-indigo-200 transition-colors ${refreshing ? 'animate-spin bg-indigo-50 text-indigo-600' : ''}`}
                             title="Refresh Data"
                         >
