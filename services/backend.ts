@@ -85,6 +85,9 @@ export class BackendService {
   
   // CACHE: Source of truth for the UI session to ensure instant updates
   private _partnershipsCache: Partnership[] | null = null;
+  
+  // LOCK: Prevent double-firing runs
+  private _isRefreshing = false;
 
   constructor() {
     this.initSupabase();
@@ -308,6 +311,7 @@ export class BackendService {
   async savePartnership(p: Partnership): Promise<Partnership[]> {
     // Update local cache immediately
     const current = await this.getPartnerships();
+    // Add to top of list
     const updated = [p, ...current.filter(i => i.id !== p.id)];
     this._partnershipsCache = updated;
 
@@ -379,6 +383,12 @@ export class BackendService {
    * Triggers Apify extraction for all active deals
    */
   async refreshPartnershipStats(manualPartnerships?: Partnership[]) {
+      // Prevent double firing if already running
+      if (this._isRefreshing) {
+          console.log("Sync already in progress, skipping trigger.");
+          return false;
+      }
+      
       // Prioritize explicit argument (so new items are included), otherwise use cache
       const partnerships = manualPartnerships || await this.getPartnerships();
       
@@ -394,13 +404,17 @@ export class BackendService {
       }
 
       try {
+          this._isRefreshing = true;
+
           // DIRECT APIFY CALL
           const actorInput = {
             "includeDownloadedVideo": false,
             "includeSharesCount": true,
             "includeTranscript": false,
             "onlyPostsNewerThan": "2020-01-01", 
-            "resultsLimit": videoUrls.length,
+            // CRITICAL OPTIMIZATION: Set Results Limit to exactly the # of URLs.
+            // This forces the scraper to stop searching once it hits the target count.
+            "resultsLimit": videoUrls.length, 
             "skipPinnedPosts": true,
             "username": videoUrls // Array of Video URLs
           };
@@ -414,6 +428,7 @@ export class BackendService {
           return true;
       } catch(e: any) {
           console.error("Partnership Refresh Failed:", e.message);
+          this._isRefreshing = false;
           return false;
       }
   }
@@ -427,13 +442,18 @@ export class BackendService {
              const items = await apifyRequest(`datasets/${run.data.defaultDatasetId}/items`);
              console.log("Extraction Succeeded. Items Recieved:", items);
              await this.updatePartnershipsFromApify(items);
+             this._isRefreshing = false; // Release lock
           } else if (['RUNNING', 'READY', 'CREATING'].includes(run.data.status)) {
              // Continue polling every 5s
              setTimeout(() => this.pollPartnershipUpdate(runId), 5000);
           } else {
              console.log("Extraction Ended with status:", run.data.status);
+             this._isRefreshing = false; // Release lock even on fail
           }
-      } catch(e) { console.error("Polling partnership stats failed", e); }
+      } catch(e) { 
+          console.error("Polling partnership stats failed", e); 
+          this._isRefreshing = false;
+      }
   }
 
   // Maps Apify results back to Partnerships based on URL or ShortCode

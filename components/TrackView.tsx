@@ -19,7 +19,8 @@ import {
   Users,
   LayoutGrid,
   TrendingUp,
-  Share2
+  Share2,
+  Loader2
 } from 'lucide-react';
 
 export const TrackView = () => {
@@ -50,37 +51,54 @@ export const TrackView = () => {
 
   const handleRefresh = async (overrideList?: Partnership[]) => {
       setRefreshing(true);
-      // Pass overrideList if provided (e.g., from save handler), otherwise let backend use its cache
+      
+      // 1. Trigger the run (The backend handles the 'active' lock)
       const listToRefresh = overrideList || partnerships;
       await backend.refreshPartnershipStats(listToRefresh);
       
-      // Poll backend cache aggressively initially
+      // 2. Poll Cache for Changes
+      // We poll more frequently now to catch the exact moment data lands
       let attempts = 0;
       const interval = setInterval(async () => {
           attempts++;
-          const fresh = await backend.getPartnerships();
-          setPartnerships([...fresh]); // Spread to force React re-render
           
+          // Fetch fresh data from backend cache
+          const fresh = await backend.getPartnerships();
+          
+          // Check if data has actually changed (simple view count check for now)
+          const hasChanges = fresh.some(newItem => {
+             const oldItem = listToRefresh.find(old => old.id === newItem.id);
+             return oldItem && newItem.views !== oldItem.views;
+          });
+
+          // Always update UI state to show latest
+          setPartnerships([...fresh]); 
           const freshMetrics = await backend.fetchAppStoreStats(dateRange);
           setMetrics(freshMetrics);
           
-          // Stop after 60s
-          if (attempts > 30) {
-              clearInterval(interval);
-              setRefreshing(false);
+          // Stop if we see changes OR if we timeout (60s)
+          if (hasChanges || attempts > 30) {
+              // If we found changes, we can stop early, OR we can let it run 
+              // a bit longer just in case other items are still processing.
+              // For better UX, we'll keep polling until timeout to ensure full sync.
+              if (attempts > 30) {
+                  clearInterval(interval);
+                  setRefreshing(false);
+                  loadData(); // Final consistency check
+              }
           }
       }, 2000);
   }
 
   const handleSavePartnership = async (p: Partnership) => {
-      // 1. Save new deal to Backend (Updates cache immediately)
+      // 1. Save new deal to Backend (Updates cache immediately with 0 views)
       const updatedList = await backend.savePartnership(p);
       setShowAddModal(false);
       
-      // 2. Update local UI immediately (shows row with 0 views)
+      // 2. Update local UI immediately so user sees the row
       setPartnerships(updatedList);
 
-      // 3. Trigger Apify Run with the UPDATED list explicitly to avoid stale state
+      // 3. Trigger Apify Run with the UPDATED list
       handleRefresh(updatedList);
   };
 
@@ -154,10 +172,11 @@ export const TrackView = () => {
                         <button className="text-slate-500 hover:text-slate-900 text-sm font-medium border border-slate-200 px-3 py-1.5 rounded-lg bg-slate-50 transition-colors">How this works</button>
                         <button 
                             onClick={() => handleRefresh()}
-                            className={`p-2 rounded-lg border border-slate-200 text-slate-500 hover:text-indigo-600 hover:border-indigo-200 transition-colors ${refreshing ? 'animate-spin bg-indigo-50 text-indigo-600' : ''}`}
+                            disabled={refreshing}
+                            className={`p-2 rounded-lg border border-slate-200 text-slate-500 hover:text-indigo-600 hover:border-indigo-200 transition-colors ${refreshing ? 'bg-indigo-50 text-indigo-600 cursor-not-allowed' : ''}`}
                             title="Refresh Data"
                         >
-                            <RefreshCw size={18} />
+                            <RefreshCw size={18} className={refreshing ? 'animate-spin' : ''} />
                         </button>
                      </div>
                  </div>
@@ -226,7 +245,6 @@ export const TrackView = () => {
                           <p className="text-slate-500 text-sm mt-1">Manage your active campaigns and track their ROI.</p>
                       </div>
                       <div className="flex items-center gap-3">
-                         {refreshing && <span className="text-xs text-indigo-600 font-medium animate-pulse">Syncing...</span>}
                          <button 
                             onClick={() => setShowAddModal(true)}
                             className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors shadow-sm"
@@ -236,11 +254,28 @@ export const TrackView = () => {
                       </div>
                   </div>
 
+                  {/* Visual Sync Progress Bar */}
+                  {refreshing && (
+                      <div className="w-full bg-indigo-50 border border-indigo-100 p-3 rounded-lg flex items-center gap-3 animate-fade-in-up">
+                        <Loader2 className="animate-spin text-indigo-600 w-5 h-5 shrink-0"/>
+                        <div className="flex-1">
+                           <div className="flex justify-between items-center mb-1">
+                               <span className="text-xs font-bold text-indigo-700">Syncing live data from Instagram...</span>
+                               <span className="text-xs text-indigo-500 font-medium">This may take up to 60s</span>
+                           </div>
+                           <div className="h-1.5 bg-indigo-200 rounded-full w-full overflow-hidden">
+                              <div className="h-full bg-indigo-600 animate-progress-indeterminate"></div>
+                           </div>
+                        </div>
+                      </div>
+                  )}
+
                   <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
                     <table className="w-full text-left text-sm">
                         <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 font-semibold text-xs uppercase tracking-wider">
                             <tr>
                                 <th className="p-4">Creator / Campaign</th>
+                                <th className="p-4">Posted</th>
                                 <th className="p-4">Status</th>
                                 <th className="p-4">Cost</th>
                                 <th className="p-4">Views</th>
@@ -262,6 +297,9 @@ export const TrackView = () => {
                                         <a href={p.videoUrl} target="_blank" className="text-xs text-indigo-600 hover:underline flex items-center gap-1">
                                             View Content <ExternalLink size={10} />
                                         </a>
+                                    </td>
+                                    <td className="p-4 text-slate-500 font-medium">
+                                        {new Date(p.postedDate).toLocaleDateString()}
                                     </td>
                                     <td className="p-4">
                                         <span className={`px-2 py-1 rounded-full text-xs font-bold uppercase tracking-wide ${p.status === 'live' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600'}`}>
@@ -302,7 +340,7 @@ export const TrackView = () => {
                             )})}
                             {partnerships.length === 0 && (
                                 <tr>
-                                    <td colSpan={8} className="p-12 text-center text-slate-500">
+                                    <td colSpan={9} className="p-12 text-center text-slate-500">
                                         No active partnerships. Add one to start tracking ROI.
                                     </td>
                                 </tr>
