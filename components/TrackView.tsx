@@ -53,9 +53,19 @@ export const TrackView = () => {
       // Pass the current state to backend to prevent DB fetch race conditions
       await backend.refreshPartnershipStats(partnerships);
       
-      // Wait a bit and then reload local data to see if any updates occurred
-      setTimeout(loadData, 2000); 
-      setRefreshing(false);
+      // Poll for updates for 20 seconds
+      const interval = setInterval(async () => {
+          const fresh = await backend.getPartnerships();
+          setPartnerships(fresh);
+          const freshMetrics = await backend.fetchAppStoreStats(dateRange);
+          setMetrics(freshMetrics);
+      }, 4000);
+
+      setTimeout(() => { 
+          clearInterval(interval); 
+          setRefreshing(false);
+          loadData(); 
+      }, 20000);
   }
 
   const handleSavePartnership = async (p: Partnership) => {
@@ -74,7 +84,12 @@ export const TrackView = () => {
           const interval = setInterval(async () => {
               const fresh = await backend.getPartnerships();
               setPartnerships(fresh);
+              
+              // Also update chart metrics
+              const freshMetrics = await backend.fetchAppStoreStats(dateRange);
+              setMetrics(freshMetrics);
           }, 4000);
+          
           setTimeout(() => { clearInterval(interval); setRefreshing(false); }, 45000);
       });
   };

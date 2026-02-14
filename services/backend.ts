@@ -64,6 +64,21 @@ const apifyRequest = async (path: string, method: string = 'GET', body?: any) =>
   return response.json();
 };
 
+// --- URL HELPERS ---
+const getShortCode = (url: string) => {
+    try {
+        // Matches /p/CODE or /reel/CODE or /reels/CODE
+        // Ignores query params like ?hl=en
+        const match = url.match(/(?:p|reel|reels)\/([a-zA-Z0-9_-]+)/);
+        if (match) return match[1];
+        
+        // Fallback: try parsing last segment
+        const u = new URL(url);
+        const parts = u.pathname.split('/').filter(x => x);
+        return parts[parts.length - 1];
+    } catch { return null; }
+};
+
 export class BackendService {
   public supabase: any = null;
   public useSupabase = false;
@@ -359,7 +374,7 @@ export class BackendService {
 
       try {
           // DIRECT APIFY CALL (Client-side)
-          // Using strict inputs for video-only data as requested
+          // Using verified input structure
           const actorInput = {
             "includeDownloadedVideo": false,
             "includeSharesCount": true,
@@ -395,29 +410,43 @@ export class BackendService {
           const run = await apifyRequest(`acts/apify~instagram-reel-scraper/runs/${runId}`);
           if (run.data.status === 'SUCCEEDED') {
              const items = await apifyRequest(`datasets/${run.data.defaultDatasetId}/items`);
+             console.log("Extraction Succeeded. Items:", items.length);
              await this.updatePartnershipsFromApify(items);
           } else if (['RUNNING', 'READY', 'CREATING'].includes(run.data.status)) {
              // Continue polling every 5s
              setTimeout(() => this.pollPartnershipUpdate(runId), 5000);
+          } else {
+             console.log("Extraction Ended with status:", run.data.status);
           }
       } catch(e) { console.error("Polling partnership stats failed", e); }
   }
 
-  // Maps Apify results back to Partnerships based on URL
+  // Maps Apify results back to Partnerships based on URL or ShortCode
   private async updatePartnershipsFromApify(items: any[]) {
       const current = await this.getPartnerships();
+      console.log("Mapping results to", current.length, "partnerships");
+
       const updated = current.map(p => {
-          // Robust matching: Check inputUrl first (Apify feature), then fallback to standard URL matching
-          const match = items.find((i: any) => 
-            (i.inputUrl && i.inputUrl === p.videoUrl) ||
-            i.url === p.videoUrl || 
-            i.url === p.videoUrl + '/' || 
-            (i.url && i.url.includes(p.videoUrl))
-          );
+          const pShortCode = getShortCode(p.videoUrl);
+          
+          // Match logic: Try ShortCode first (Reliable), then URL exact match
+          const match = items.find((i: any) => {
+              // 1. Try ShortCode (Handles ?hl=en and other query params automatically)
+              if (pShortCode && i.shortCode && i.shortCode === pShortCode) return true;
+              if (pShortCode && i.url && i.url.includes(pShortCode)) return true;
+
+              // 2. Try Exact Input URL match (Backup)
+              if (i.inputUrl === p.videoUrl) return true;
+              if (i.url === p.videoUrl) return true;
+              
+              return false;
+          });
 
           if (match) {
+              console.log("Matched:", p.videoUrl, "with", match.url);
               return {
                   ...p,
+                  // Prioritize videoPlayCount (Reel Plays) over videoViewCount
                   views: match.videoPlayCount || match.videoViewCount || p.views,
                   likes: match.likesCount || p.likes,
                   comments: match.commentsCount || p.comments,
@@ -437,6 +466,7 @@ export class BackendService {
            }
       } 
       localStorage.setItem(STORAGE_KEYS.PARTNERSHIPS, JSON.stringify(updated));
+      console.log("Partnerships updated successfully.");
   }
 
   /**
@@ -451,13 +481,25 @@ export class BackendService {
       const data: DailyMetric[] = [];
       const today = new Date();
 
+      // Pseudo-random generator for stable mock charts
+      const stableRandom = (input: string) => {
+          let hash = 0;
+          for (let i = 0; i < input.length; i++) {
+              hash = ((hash << 5) - hash) + input.charCodeAt(i);
+              hash = hash & hash;
+          }
+          return Math.abs(hash);
+      }
+
       // Generate daily data
       for (let i = days; i >= 0; i--) {
           const date = new Date(today);
           date.setDate(date.getDate() - i);
           const dateStr = date.toISOString().split('T')[0];
           
-          let dailyInstalls = 45 + Math.floor(Math.random() * 20); // Baseline organic
+          // Stable mock organic baseline
+          const seed = stableRandom(dateStr);
+          let dailyInstalls = 45 + (seed % 20); 
           let dailyViews = 0;
 
           // Check for Creator Drops
@@ -467,7 +509,7 @@ export class BackendService {
 
              // If this specific day IS the post day, add the view count to the chart data
              if (dateStr === pDateStr) {
-                 dailyViews += (p.views || 5000); // Add the video views to this day
+                 dailyViews += p.views; // Real views (starts at 0)
              }
 
              // Correlation Logic: Boost installs if recently posted
@@ -475,7 +517,9 @@ export class BackendService {
              const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); 
              
              if (date >= pDate && diffDays <= 7) {
-                 const boost = Math.floor(150 / (diffDays + 1)); // Decay effect
+                 // Simulate lift based on view count (or mock if 0)
+                 const impact = p.views > 0 ? Math.ceil(p.views / 200) : 50; 
+                 const boost = Math.floor(impact / (diffDays + 1)); 
                  dailyInstalls += boost;
              }
           });
@@ -483,8 +527,8 @@ export class BackendService {
           data.push({
               date: dateStr,
               installs: dailyInstalls,
-              uninstalls: Math.floor(dailyInstalls * 0.2), // 20% churn mock
-              retention: 100 - (i % 10), // Mock retention curve
+              uninstalls: Math.floor(dailyInstalls * 0.2), 
+              retention: 100 - (i % 10), 
               views: dailyViews 
           });
       }
