@@ -5,9 +5,10 @@ interface LoginProps {
   onLogin: (email: string) => Promise<void>;
   onBack?: () => void; // New prop
   loading?: boolean;
+  waitingForMagicLink?: boolean;
 }
 
-export const Login: React.FC<LoginProps> = ({ onLogin, onBack, loading = false }) => {
+export const Login: React.FC<LoginProps> = ({ onLogin, onBack, loading = false, waitingForMagicLink = false }) => {
   const [email, setEmail] = useState('');
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -33,7 +34,7 @@ export const Login: React.FC<LoginProps> = ({ onLogin, onBack, loading = false }
         <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-indigo-600 text-white shadow-xl shadow-indigo-600/20 mb-6">
           <span className="text-3xl font-bold">C</span>
         </div>
-        <h1 className="text-3xl font-bold text-slate-900 mb-2">Welcome to CreatorLogic</h1>
+        <h1 className="text-3xl font-bold text-slate-900 mb-2">Welcome to CollabFlow</h1>
         <p className="text-slate-500 max-w-md">Automated influencer discovery for high-performance agencies.</p>
       </div>
 
@@ -77,7 +78,7 @@ export const Login: React.FC<LoginProps> = ({ onLogin, onBack, loading = false }
         </div>
       </div>
       
-      <p className="mt-8 text-xs text-slate-400">By continuing, you agree to CreatorLogic's Terms & Conditions.</p>
+      <p className="mt-8 text-xs text-slate-400">By continuing, you agree to CollabFlow's Terms & Conditions.</p>
 
     </div>
   );

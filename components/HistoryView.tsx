@@ -5,9 +5,10 @@ import { Clock, CheckCircle2, XCircle, ArrowRight, Loader2, BarChart3, Search } 
 interface HistoryViewProps {
   history: SearchHistoryItem[];
   onSelectJob: (jobId: string) => void;
+  onOpenCompare: () => void;
 }
 
-export const HistoryView: React.FC<HistoryViewProps> = ({ history, onSelectJob }) => {
+export const HistoryView: React.FC<HistoryViewProps> = ({ history, onSelectJob, onOpenCompare }) => {
   if (history.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center h-[60vh] text-slate-400">
@@ -22,6 +23,13 @@ export const HistoryView: React.FC<HistoryViewProps> = ({ history, onSelectJob }
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h2 className="text-2xl font-bold text-slate-900">Search History</h2>
+        <button 
+            onClick={onOpenCompare}
+            className="flex items-center gap-2 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 px-4 py-2 rounded-lg text-sm font-medium transition-all shadow-sm"
+        >
+            <BarChart3 size={16} className="text-indigo-600" />
+            Compare Creators
+        </button>
       </div>
 
       <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">

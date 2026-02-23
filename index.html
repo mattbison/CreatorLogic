@@ -3,7 +3,28 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>CreatorLogic | Secure V2</title>
+    <title>CollabFlow | Secure V2</title>
+    <script>
+      // Prevent libraries from trying to polyfill fetch if it already exists
+      // This fixes "Uncaught TypeError: Cannot set property fetch of #<Window> which has only a getter"
+      // by providing a dummy setter that ignores the assignment.
+      (function() {
+        if (typeof window !== 'undefined' && window.fetch) {
+          try {
+            const originalFetch = window.fetch;
+            Object.defineProperty(window, 'fetch', {
+              get: function() { return originalFetch; },
+              set: function(v) { 
+                console.warn('Blocked attempt to overwrite window.fetch');
+              },
+              configurable: true
+            });
+          } catch (e) {
+            console.warn("Could not protect fetch", e);
+          }
+        }
+      })();
+    </script>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
     <script>
@@ -28,9 +49,22 @@
                 900: '#0f172a',
                 950: '#020617',
               },
+              indigo: {
+                50: '#eff1fa',
+                100: '#e0e4f5',
+                200: '#c2c9eb',
+                300: '#a3ade0',
+                400: '#8592d6',
+                500: '#4b61bf',
+                600: '#2a42a6',
+                700: '#233584',
+                800: '#1e2b69',
+                900: '#1a2352',
+                950: '#0f1330',
+              },
               primary: {
-                500: '#6366f1',
-                600: '#4f46e5',
+                500: '#2a42a6',
+                600: '#1e3a8a',
               }
             }
           }
@@ -58,21 +92,7 @@
         background: #94a3b8; 
       }
     </style>
-  <script type="importmap">
-{
-  "imports": {
-    "react": "https://esm.sh/react@^19.2.4",
-    "react-dom/": "https://esm.sh/react-dom@^19.2.4/",
-    "react/": "https://esm.sh/react@^19.2.4/",
-    "lucide-react": "https://esm.sh/lucide-react@^0.564.0",
-    "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@^2.95.3",
-    "vite": "https://esm.sh/vite@^7.3.1",
-    "@vitejs/plugin-react": "https://esm.sh/@vitejs/plugin-react@^5.1.4",
-    "jsonwebtoken": "https://esm.sh/jsonwebtoken@^9.0.3"
-  }
-}
-</script>
-</head>
+  </head>
   <body>
     <div id="root"></div>
     <script type="module" src="/index.tsx"></script>

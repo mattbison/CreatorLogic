@@ -24,11 +24,12 @@ interface AnalyticsViewProps {
   posts: InstagramPost[];
   username: string;
   onReset: () => void;
+  onRefresh: () => void;
 }
 
 type SortOption = 'date_desc' | 'date_asc' | 'views_desc' | 'views_asc';
 
-export const AnalyticsView: React.FC<AnalyticsViewProps> = ({ posts, username, onReset }) => {
+export const AnalyticsView: React.FC<AnalyticsViewProps> = ({ posts, username, onReset, onRefresh }) => {
   const [costPerPostInput, setCostPerPostInput] = useState<string>('500');
   const [sortOption, setSortOption] = useState<SortOption>('date_desc');
 
@@ -38,6 +39,10 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({ posts, username, o
     if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
     if (num >= 1000) return (num / 1000).toFixed(1) + 'k';
     return num.toLocaleString();
+  };
+
+  const handleExport = () => {
+      window.print();
   };
 
   // --- SORTING ---
@@ -114,11 +119,11 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({ posts, username, o
     <div className="min-h-screen bg-slate-50">
         
         {/* TOP BAR */}
-        <div className="sticky top-0 z-10 bg-white/80 backdrop-blur-md border-b border-slate-200 mb-8">
+        <div className="sticky top-0 z-10 bg-white/80 backdrop-blur-md border-b border-slate-200 mb-8 print:hidden">
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
                 <div className="flex items-center gap-4">
                     <div onClick={onReset} className="font-bold text-xl tracking-tighter text-indigo-600 cursor-pointer">
-                        CreatorLogic
+                        CollabFlow
                     </div>
                     <div className="h-6 w-px bg-slate-200 mx-2 hidden md:block"></div>
                     <div className="hidden md:flex items-center gap-2 text-sm text-slate-500 bg-slate-100 py-1.5 px-3 rounded-full border border-slate-200">
@@ -127,13 +132,33 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({ posts, username, o
                     </div>
                 </div>
                 
-                <button 
-                onClick={onReset}
-                className="flex items-center gap-2 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 px-4 py-2 rounded-lg text-sm font-medium transition-all shadow-sm hover:border-slate-300 group"
-                >
-                <Plus size={16} className="text-slate-400 group-hover:text-indigo-600 transition-colors" />
-                New Analysis
-                </button>
+                <div className="flex items-center gap-2">
+                    <button 
+                    onClick={onRefresh}
+                    className="flex items-center gap-2 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 px-3 py-2 rounded-lg text-sm font-medium transition-all shadow-sm hover:border-slate-300"
+                    title="Refresh Data"
+                    >
+                    <ArrowUpDown size={16} className="text-slate-400" />
+                    <span className="hidden sm:inline">Refresh</span>
+                    </button>
+
+                    <button 
+                    onClick={handleExport}
+                    className="flex items-center gap-2 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 px-3 py-2 rounded-lg text-sm font-medium transition-all shadow-sm hover:border-slate-300"
+                    title="Export to PDF"
+                    >
+                    <ExternalLink size={16} className="text-slate-400" />
+                    <span className="hidden sm:inline">Share</span>
+                    </button>
+
+                    <button 
+                    onClick={onReset}
+                    className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-all shadow-sm"
+                    >
+                    <Plus size={16} className="text-indigo-200" />
+                    New Analysis
+                    </button>
+                </div>
             </div>
         </div>
 
@@ -437,7 +462,7 @@ const TrendLineChart = ({ posts }: { posts: InstagramPost[] }) => {
                 {/* The Line */}
                 <polyline 
                     fill="none" 
-                    stroke="#6366f1" 
+                    stroke="#2a42a6" 
                     strokeWidth="3" 
                     points={points} 
                     strokeLinecap="round" 
@@ -454,7 +479,7 @@ const TrendLineChart = ({ posts }: { posts: InstagramPost[] }) => {
                 
                 <defs>
                     <linearGradient id="chartGradient" x1="0" x2="0" y1="0" y2="1">
-                        <stop offset="0%" stopColor="#6366f1" />
+                        <stop offset="0%" stopColor="#2a42a6" />
                         <stop offset="100%" stopColor="#ffffff" stopOpacity="0" />
                     </linearGradient>
                 </defs>
@@ -465,7 +490,7 @@ const TrendLineChart = ({ posts }: { posts: InstagramPost[] }) => {
                     const y = height - paddingY - ((val - 0) / (maxVal - 0)) * chartHeight;
                     return (
                         <g key={i} className="group/point">
-                            <circle cx={x} cy={y} r="4" fill="white" stroke="#6366f1" strokeWidth="2" className="opacity-100 transition-all hover:r-6 cursor-pointer" />
+                            <circle cx={x} cy={y} r="4" fill="white" stroke="#2a42a6" strokeWidth="2" className="opacity-100 transition-all hover:r-6 cursor-pointer" />
                             <title>{val.toLocaleString()} Views</title>
                         </g>
                     );

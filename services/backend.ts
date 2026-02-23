@@ -47,7 +47,7 @@ const getEnvVar = (key: string): string | undefined => {
      const procVal = process.env[viteKey] || process.env[key];
      if (procVal) return procVal;
   } catch(e) {}
-  return localStorage.getItem(`creatorlogic_${key.toLowerCase()}`);
+  return localStorage.getItem(`creatorlogic_${key.toLowerCase()}`) || undefined;
 };
 
 // --- APIFY HELPERS ---
@@ -229,14 +229,54 @@ export class BackendService {
     return jobId;
   }
 
-  async startAnalytics(username: string): Promise<string> {
-    const jobId = crypto.randomUUID();
+  async startAnalytics(username: string, forceRefresh = false): Promise<string> {
     const sanitizedSeed = username.replace('@', '').trim();
+
+    // 1. Check for existing job (Cache)
+    if (!forceRefresh) {
+        const existing = await this.findExistingAnalyticsJob(sanitizedSeed);
+        if (existing) {
+            console.log(`[Cache] Found existing analytics for ${sanitizedSeed}, returning Job ID: ${existing.id}`);
+            return existing.id;
+        }
+    }
+
+    // 2. If force refresh, delete old one to "overwrite"
+    if (forceRefresh) {
+        await this.deleteAnalyticsJob(sanitizedSeed);
+    }
+
+    const jobId = crypto.randomUUID();
     jobStore[jobId] = { id: jobId, type: 'analytics', seedUsername: sanitizedSeed, limit: 10, status: { jobId, status: 'pending', progress: 0, logs: ['[System] Initializing Analytics...'], resultCount: 0 }, finalResults: [] };
 
     await this.saveHistoryItem({ id: jobId, date: new Date().toISOString(), type: 'analytics', seedUsername: sanitizedSeed, status: 'pending', resultsCount: 0, emailsFound: 0 });
     this.executeWorkflow(jobId);
     return jobId;
+  }
+
+  private async findExistingAnalyticsJob(username: string): Promise<SearchHistoryItem | null> {
+      const history = await this.getHistory();
+      // Find most recent completed analytics job for this user
+      return history.find(h => 
+          h.type === 'analytics' && 
+          h.seedUsername.toLowerCase() === username.toLowerCase() && 
+          h.status === 'completed'
+      ) || null;
+  }
+
+  private async deleteAnalyticsJob(username: string) {
+      const history = await this.getHistory();
+      const jobToDelete = history.find(h => h.type === 'analytics' && h.seedUsername.toLowerCase() === username.toLowerCase());
+      
+      if (!jobToDelete) return;
+
+      if (this.useSupabase) {
+          await this.supabase.from('search_jobs').delete().eq('id', jobToDelete.id);
+          await this.supabase.from('search_results').delete().eq('job_id', jobToDelete.id);
+      } else {
+          const newHistory = history.filter(h => h.id !== jobToDelete.id);
+          localStorage.setItem(STORAGE_KEYS.HISTORY, JSON.stringify(newHistory));
+      }
   }
 
   async checkJobStatus(jobId: string): Promise<{ status: JobStatus; data?: any[] }> {

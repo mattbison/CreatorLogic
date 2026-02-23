@@ -80,7 +80,7 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({ data, seedUr
     if (link.download !== undefined) {
       const url = URL.createObjectURL(blob);
       link.setAttribute('href', url);
-      link.setAttribute('download', `creatorlogic_enriched_${seedUrl}.csv`);
+      link.setAttribute('download', `collabflow_enriched_${seedUrl}.csv`);
       link.style.visibility = 'hidden';
       document.body.appendChild(link);
       link.click();
@@ -99,7 +99,7 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({ data, seedUr
               onClick={onReset}
               className="font-bold text-xl tracking-tighter text-indigo-600 cursor-pointer"
             >
-              CreatorLogic
+              CollabFlow
             </div>
             <div className="h-6 w-px bg-slate-200 mx-2 hidden md:block"></div>
             <div className="hidden md:flex items-center gap-2 text-sm text-slate-500 bg-slate-100 py-1.5 px-3 rounded-full border border-slate-200">

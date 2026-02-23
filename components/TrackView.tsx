@@ -417,7 +417,7 @@ export const TrackView = () => {
                         {/* Wizard Header */}
                         <div className="bg-slate-50 p-6 border-b border-slate-200">
                             <h2 className="text-xl font-bold text-slate-900 mb-2">Link your app store</h2>
-                            <p className="text-slate-500 text-sm">Connect once to pull live installs, sales, and subscription metrics into CreatorLogic. We never share this data.</p>
+                            <p className="text-slate-500 text-sm">Connect once to pull live installs, sales, and subscription metrics into CollabFlow. We never share this data.</p>
                             
                             {/* Platform Selector */}
                             <div className="flex gap-4 mt-8">
@@ -696,13 +696,13 @@ const DualAxisChart = ({ metrics }: { metrics: DailyMetric[] }) => {
                 })}
 
                 {/* Installs Line */}
-                <polyline points={linePath} fill="none" stroke="#6366f1" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+                <polyline points={linePath} fill="none" stroke="#2a42a6" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
                 
                 {/* Area Gradient */}
                 <defs>
                     <linearGradient id="areaGradient" x1="0" x2="0" y1="0" y2="1">
-                        <stop offset="0%" stopColor="#6366f1" stopOpacity="0.1"/>
-                        <stop offset="100%" stopColor="#6366f1" stopOpacity="0"/>
+                        <stop offset="0%" stopColor="#2a42a6" stopOpacity="0.1"/>
+                        <stop offset="100%" stopColor="#2a42a6" stopOpacity="0"/>
                     </linearGradient>
                 </defs>
                 <polygon points={`${paddingX},${height-paddingY} ${linePath} ${width-paddingX},${height-paddingY}`} fill="url(#areaGradient)" />
@@ -714,7 +714,7 @@ const DualAxisChart = ({ metrics }: { metrics: DailyMetric[] }) => {
                     return (
                         <g key={i} className="group/point">
                              {/* The visible dot on the line */}
-                             <circle cx={x} cy={y} r="4" fill="#6366f1" stroke="white" strokeWidth="2" className="opacity-0 group-hover/chart:opacity-100 transition-opacity" />
+                             <circle cx={x} cy={y} r="4" fill="#2a42a6" stroke="white" strokeWidth="2" className="opacity-0 group-hover/chart:opacity-100 transition-opacity" />
                              
                              {/* The tooltip box (SVG-based) */}
                              <g className="opacity-0 group-hover/point:opacity-100 transition-opacity pointer-events-none">
@@ -726,7 +726,7 @@ const DualAxisChart = ({ metrics }: { metrics: DailyMetric[] }) => {
                                     {d.installs} Installs
                                 </text>
                                 {d.views > 0 && (
-                                     <text x={x} y={y - 35} textAnchor="middle" fill="#818cf8" fontSize="10" fontWeight="bold">
+                                     <text x={x} y={y - 35} textAnchor="middle" fill="#8592d6" fontSize="10" fontWeight="bold">
                                         ★ {d.views} Views
                                     </text>
                                 )}

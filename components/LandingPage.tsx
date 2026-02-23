@@ -2,10 +2,10 @@ import React, { useState } from 'react';
 import { ArrowRight, CheckCircle2, ChevronDown, ChevronUp, Database, Zap, BarChart3, Search, Mail, Users, Star, Menu, X } from 'lucide-react';
 
 interface LandingPageProps {
-  onStart: () => void;
+  onGetStarted: () => void;
 }
 
-export const LandingPage: React.FC<LandingPageProps> = ({ onStart }) => {
+export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [billingCycle, setBillingCycle] = useState<'monthly' | 'yearly'>('monthly');
 
@@ -36,7 +36,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onStart }) => {
             {/* Logo */}
             <div className="flex items-center gap-2 text-indigo-600 cursor-pointer" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}>
               <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center text-white font-bold text-lg">C</div>
-              <span className="font-bold text-xl tracking-tight text-slate-900">CreatorLogic</span>
+              <span className="font-bold text-xl tracking-tight text-slate-900">CollabFlow</span>
             </div>
 
             {/* Desktop Links */}
@@ -50,14 +50,14 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onStart }) => {
             {/* CTA Buttons */}
             <div className="hidden md:flex items-center gap-3">
               <button 
-                onClick={onStart}
+                onClick={onGetStarted}
                 className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-lg text-sm font-medium hover:bg-slate-50 hover:border-slate-300 transition-all text-slate-700 shadow-sm"
               >
                 <img src="https://www.google.com/favicon.ico" alt="G" className="w-4 h-4" />
                 Join with Google
               </button>
               <button 
-                onClick={onStart}
+                onClick={onGetStarted}
                 className="px-5 py-2 bg-slate-900 text-white rounded-lg text-sm font-medium hover:bg-slate-800 transition-all shadow-md shadow-slate-900/10"
               >
                 Open App
@@ -80,10 +80,10 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onStart }) => {
              <a href="#solution" className="block py-2 text-slate-600 font-medium" onClick={(e) => scrollToSection(e, 'solution')}>Solution</a>
              <a href="#pricing" className="block py-2 text-slate-600 font-medium" onClick={(e) => scrollToSection(e, 'pricing')}>Pricing</a>
              <a href="#faq" className="block py-2 text-slate-600 font-medium" onClick={(e) => scrollToSection(e, 'faq')}>FAQ</a>
-             <button onClick={onStart} className="w-full mt-4 flex justify-center items-center gap-2 px-4 py-3 bg-white border border-slate-200 rounded-lg font-medium text-slate-700">
+             <button onClick={onGetStarted} className="w-full mt-4 flex justify-center items-center gap-2 px-4 py-3 bg-white border border-slate-200 rounded-lg font-medium text-slate-700">
                 <img src="https://www.google.com/favicon.ico" alt="G" className="w-4 h-4" /> Join with Google
              </button>
-             <button onClick={onStart} className="w-full px-4 py-3 bg-indigo-600 text-white rounded-lg font-medium">Open App</button>
+             <button onClick={onGetStarted} className="w-full px-4 py-3 bg-indigo-600 text-white rounded-lg font-medium">Open App</button>
           </div>
         )}
       </nav>
@@ -104,13 +104,13 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onStart }) => {
         
         <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-16">
           <button 
-            onClick={onStart}
+            onClick={onGetStarted}
             className="w-full sm:w-auto px-8 py-4 bg-slate-900 text-white rounded-xl text-base font-semibold hover:bg-slate-800 transition-all shadow-lg shadow-slate-900/20 hover:shadow-xl hover:-translate-y-0.5"
           >
             Start Tracking
           </button>
           <button 
-            onClick={onStart}
+            onClick={onGetStarted}
             className="w-full sm:w-auto px-8 py-4 bg-white text-slate-700 border border-slate-200 rounded-xl text-base font-semibold hover:bg-slate-50 transition-all shadow-sm hover:border-slate-300"
           >
             Free Demo
@@ -131,7 +131,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onStart }) => {
                    <div className="w-3 h-3 rounded-full bg-emerald-500/80"></div>
                 </div>
                 <div className="flex-1 bg-slate-950/50 rounded-md py-1 px-3 text-xs text-slate-500 text-center font-mono border border-slate-800/50">
-                   app.creatorlogic.io/dashboard
+                   app.collabflow.io/dashboard
                 </div>
              </div>
              {/* Fake Dashboard Content */}
@@ -277,7 +277,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onStart }) => {
                  "Priority Email Support"
                ]}
                active={true}
-               onStart={onStart}
+               onStart={onGetStarted}
              />
           </div>
         </div>
@@ -287,11 +287,11 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onStart }) => {
       <section id="faq" className="py-24 bg-white scroll-mt-20">
          <div className="max-w-3xl mx-auto px-4">
             <h2 className="text-4xl font-bold text-center text-slate-900 mb-4">Common Questions</h2>
-            <p className="text-center text-slate-500 mb-12">We're here to help you get the most out of CreatorLogic.</p>
+            <p className="text-center text-slate-500 mb-12">We're here to help you get the most out of CollabFlow.</p>
             
             <div className="space-y-4">
-               <Accordion title="What is CreatorLogic?">
-                  CreatorLogic is an automated intelligence tool designed for B2B agencies and UGC marketers. It replaces the manual "suggested accounts" rabbit hole with an automated pipeline that discovers, enriches, and analyzes influencer data.
+               <Accordion title="What is CollabFlow?">
+                  CollabFlow is an automated intelligence tool designed for B2B agencies and UGC marketers. It replaces the manual "suggested accounts" rabbit hole with an automated pipeline that discovers, enriches, and analyzes influencer data.
                </Accordion>
                <Accordion title="How does the discovery engine work?">
                   We use a task-based scraping architecture. You provide a "Seed Account" (e.g., a competitor or ideal influencer), and our system recursively finds high-affinity profiles that the algorithm suggests, ensuring 99% relevance.
@@ -312,7 +312,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onStart }) => {
             <div className="col-span-2 md:col-span-1">
                <div className="flex items-center gap-2 text-white mb-4">
                   <div className="w-6 h-6 bg-indigo-600 rounded flex items-center justify-center text-white font-bold text-xs">C</div>
-                  <span className="font-bold text-lg">CreatorLogic</span>
+                  <span className="font-bold text-lg">CollabFlow</span>
                </div>
                <p className="text-sm text-slate-500">Automating the future of influencer discovery.</p>
             </div>
@@ -341,7 +341,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onStart }) => {
             </div>
          </div>
          <div className="max-w-7xl mx-auto px-4 text-center text-xs text-slate-600 border-t border-slate-800 pt-8">
-            &copy; {new Date().getFullYear()} CreatorLogic Inc. All rights reserved.
+            &copy; {new Date().getFullYear()} CollabFlow Inc. All rights reserved.
          </div>
       </footer>
     </div>

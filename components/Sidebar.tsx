@@ -36,14 +36,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
   }, [isMenuOpen]);
 
   return (
-    <div className="w-64 h-screen bg-white border-r border-slate-200 flex flex-col fixed left-0 top-0 z-20">
+    <div className="w-64 h-screen bg-white border-r border-slate-200 flex flex-col fixed left-0 top-0 z-20 print:hidden">
       {/* Brand */}
       <div className="p-6">
         <div className="flex items-center gap-2 text-indigo-600">
           <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center text-white font-bold text-lg">
             C
           </div>
-          <span className="font-bold text-xl tracking-tight text-slate-900">CreatorLogic</span>
+          <span className="font-bold text-xl tracking-tight text-slate-900">CollabFlow</span>
         </div>
       </div>
 

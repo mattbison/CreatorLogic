@@ -1,6 +1,6 @@
-# 🚀 CreatorLogic V2
+# 🚀 CollabFlow
 
-**CreatorLogic** is a high-performance B2B SaaS platform designed for UGC Agencies and Influencer Marketers to automate the discovery, enrichment, and analysis of creators.
+**CollabFlow** is a high-performance B2B SaaS platform designed for UGC Agencies and Influencer Marketers to automate the discovery, enrichment, and analysis of creators.
 
 ## ✨ Features
 
@@ -34,4 +34,4 @@ This project uses **Zero-Secret Source Control**. All API keys must be configure
 4. Build for production: `npm run build`
 
 ---
-© 2025 CreatorLogic Inc.
+© 2025 CollabFlow Inc.
