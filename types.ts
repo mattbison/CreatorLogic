@@ -44,6 +44,7 @@ export interface SearchHistoryItem {
   status: 'completed' | 'failed' | 'pending';
   resultsCount: number;
   emailsFound: number;
+  followerCount?: number; // Added for Creator History view
   userId?: string; // For Agency View
   userEmail?: string; // For Agency View
 }

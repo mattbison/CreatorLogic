@@ -1,12 +1,12 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { User } from '../types';
-import { Search, History, BarChart3, LogOut, ChevronUp, Building2, Target } from 'lucide-react';
+import { Search, History, BarChart3, LogOut, ChevronUp, Building2, Target, Users } from 'lucide-react';
 
 interface SidebarProps {
   user: User;
-  activeTab: 'search' | 'history' | 'analytics' | 'agency' | 'track';
-  onTabChange: (tab: 'search' | 'history' | 'analytics' | 'agency' | 'track') => void;
+  activeTab: 'search' | 'history' | 'creator-history' | 'analytics' | 'agency' | 'track';
+  onTabChange: (tab: 'search' | 'history' | 'creator-history' | 'analytics' | 'agency' | 'track') => void;
   onLogout: () => void;
 }
 
@@ -17,6 +17,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onLogout
 }) => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [isHistoryOpen, setIsHistoryOpen] = useState(activeTab === 'history' || activeTab === 'creator-history');
   const menuRef = useRef<HTMLDivElement>(null);
 
   // Close menu when clicking outside
@@ -48,19 +49,52 @@ export const Sidebar: React.FC<SidebarProps> = ({
       </div>
 
       {/* Navigation */}
-      <div className="flex-1 px-3 py-4 space-y-1">
+      <div className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
         <NavButton 
           active={activeTab === 'search'} 
           onClick={() => onTabChange('search')}
           icon={<Search size={20} />}
           label="Search"
         />
-        <NavButton 
-          active={activeTab === 'history'} 
-          onClick={() => onTabChange('history')}
-          icon={<History size={20} />}
-          label="History"
-        />
+
+        {/* Collapsible History Section */}
+        <div className="space-y-1">
+          <button 
+            onClick={() => setIsHistoryOpen(!isHistoryOpen)}
+            className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${
+              (activeTab === 'history' || activeTab === 'creator-history')
+                ? 'text-indigo-700' 
+                : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+            }`}
+          >
+            <div className="flex items-center gap-3">
+              <History size={20} />
+              History
+            </div>
+            <ChevronUp 
+              size={14} 
+              className={`text-slate-400 transition-transform duration-200 ${isHistoryOpen ? 'rotate-180' : ''}`} 
+            />
+          </button>
+          
+          {isHistoryOpen && (
+            <div className="pl-9 space-y-1 animate-fade-in">
+              <NavButton 
+                active={activeTab === 'history'} 
+                onClick={() => onTabChange('history')}
+                label="Search History"
+                compact
+              />
+              <NavButton 
+                active={activeTab === 'creator-history'} 
+                onClick={() => onTabChange('creator-history')}
+                label="Creator History"
+                compact
+              />
+            </div>
+          )}
+        </div>
+
         <NavButton 
           active={activeTab === 'analytics'} 
           onClick={() => onTabChange('analytics')}
@@ -131,10 +165,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
   );
 };
 
-const NavButton = ({ active, onClick, icon, label, badge }: any) => (
+const NavButton = ({ active, onClick, icon, label, badge, compact }: any) => (
   <button 
     onClick={onClick}
-    className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${
+    className={`w-full flex items-center justify-between rounded-lg text-sm font-medium transition-all ${
+      compact ? 'px-3 py-1.5' : 'px-3 py-2.5'
+    } ${
       active 
         ? 'bg-indigo-50 text-indigo-700' 
         : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
@@ -142,7 +178,7 @@ const NavButton = ({ active, onClick, icon, label, badge }: any) => (
   >
     <div className="flex items-center gap-3">
       {icon}
-      {label}
+      <span className={compact ? 'text-xs' : ''}>{label}</span>
     </div>
     {badge && (
       <span className="px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide bg-indigo-100 text-indigo-600 rounded-md">

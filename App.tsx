@@ -7,6 +7,7 @@ import { Sidebar } from './components/Sidebar';
 import { Login } from './components/Login';
 import { LandingPage } from './components/LandingPage';
 import { HistoryView } from './components/HistoryView';
+import { CreatorHistoryView } from './components/CreatorHistoryView';
 import { AnalyticsView } from './components/AnalyticsView';
 import { AgencyDashboard } from './components/AgencyDashboard';
 import { TrackView } from './components/TrackView';
@@ -22,7 +23,7 @@ function App() {
   const [showLogin, setShowLogin] = useState(false);
 
   // App State
-  const [activeTab, setActiveTab] = useState<'search' | 'history' | 'analytics' | 'agency' | 'track'>('search');
+  const [activeTab, setActiveTab] = useState<'search' | 'history' | 'creator-history' | 'analytics' | 'agency' | 'track'>('search');
   const [showCompare, setShowCompare] = useState(false);
   
   // Search (Discovery) State
@@ -309,16 +310,16 @@ function App() {
                  <p className="text-slate-500 mb-8 text-lg">Discover influencers similar to any account. Enter a username to start scraping.</p>
                  
                  <form onSubmit={handleSearch} className="relative max-w-md mx-auto">
-                    <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                      <span className="text-slate-400 font-bold">@</span>
+                    <div className="flex items-center bg-white border border-slate-200 rounded-xl shadow-sm focus-within:ring-2 focus-within:ring-indigo-500 transition-all overflow-hidden">
+                      <span className="pl-4 text-slate-400 font-bold text-lg select-none">@</span>
+                      <input
+                        type="text"
+                        value={seedUsername}
+                        onChange={(e) => setSeedUsername(e.target.value)}
+                        placeholder="hormozi"
+                        className="flex-1 pl-1 pr-32 py-4 outline-none text-lg"
+                      />
                     </div>
-                    <input
-                      type="text"
-                      value={seedUsername}
-                      onChange={(e) => setSeedUsername(e.target.value)}
-                      placeholder="hormozi"
-                      className="w-full pl-10 pr-4 py-4 bg-white border border-slate-200 rounded-xl shadow-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all text-lg"
-                    />
                     <button 
                       type="submit"
                       className="absolute right-2 top-2 bottom-2 bg-indigo-600 hover:bg-indigo-700 text-white px-6 rounded-lg font-medium transition-colors flex items-center gap-2"
@@ -350,17 +351,17 @@ function App() {
                             <h2 className="text-2xl font-bold text-slate-900 mb-2">Deep Dive Analytics</h2>
                             <p className="text-slate-500 mb-8">Get detailed performance metrics, engagement rates, and deal value estimates for any creator.</p>
                             
-                            <form onSubmit={handleStartAnalytics} className="relative">
-                                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                                    <span className="text-slate-400 font-bold">@</span>
+                            <form onSubmit={handleStartAnalytics}>
+                                <div className="flex items-center bg-white border border-slate-200 rounded-xl shadow-sm focus-within:ring-2 focus-within:ring-indigo-500 transition-all overflow-hidden">
+                                    <span className="pl-4 text-slate-400 font-bold text-lg select-none">@</span>
+                                    <input
+                                        type="text"
+                                        value={analyticsUsername}
+                                        onChange={(e) => setAnalyticsUsername(e.target.value)}
+                                        placeholder="mrbeast"
+                                        className="flex-1 pl-1 pr-4 py-4 outline-none text-lg"
+                                    />
                                 </div>
-                                <input
-                                    type="text"
-                                    value={analyticsUsername}
-                                    onChange={(e) => setAnalyticsUsername(e.target.value)}
-                                    placeholder="mrbeast"
-                                    className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
-                                />
                                 <button 
                                     type="submit"
                                     className="w-full mt-4 bg-indigo-600 hover:bg-indigo-700 text-white py-3 rounded-xl font-bold transition-all shadow-lg shadow-indigo-200"
@@ -401,6 +402,15 @@ function App() {
                 history={history} 
                 onSelectJob={handleSelectHistoryJob} 
                 onOpenCompare={() => setShowCompare(true)}
+            />
+          </div>
+        )}
+
+        {activeTab === 'creator-history' && (
+          <div className="p-8 max-w-7xl mx-auto">
+            <CreatorHistoryView 
+                history={history} 
+                onSelectCreator={handleSelectHistoryJob} 
             />
           </div>
         )}

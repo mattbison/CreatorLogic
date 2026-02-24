@@ -9,7 +9,10 @@ interface HistoryViewProps {
 }
 
 export const HistoryView: React.FC<HistoryViewProps> = ({ history, onSelectJob, onOpenCompare }) => {
-  if (history.length === 0) {
+  // Filter to only show discovery jobs for "Search History"
+  const discoveryHistory = history.filter(h => h.type === 'discovery' || !h.type);
+
+  if (discoveryHistory.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center h-[60vh] text-slate-400">
         <Clock size={48} className="mb-4 opacity-20" />
@@ -23,13 +26,6 @@ export const HistoryView: React.FC<HistoryViewProps> = ({ history, onSelectJob, 
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h2 className="text-2xl font-bold text-slate-900">Search History</h2>
-        <button 
-            onClick={onOpenCompare}
-            className="flex items-center gap-2 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 px-4 py-2 rounded-lg text-sm font-medium transition-all shadow-sm"
-        >
-            <BarChart3 size={16} className="text-indigo-600" />
-            Compare Creators
-        </button>
       </div>
 
       <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
@@ -45,18 +41,12 @@ export const HistoryView: React.FC<HistoryViewProps> = ({ history, onSelectJob, 
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
-            {history.map((item) => (
+            {discoveryHistory.map((item) => (
               <tr key={item.id} className="hover:bg-slate-50/80 transition-colors group">
                 <td className="px-6 py-4">
-                  {item.type === 'analytics' ? (
-                     <div className="w-8 h-8 rounded-lg bg-indigo-100 flex items-center justify-center text-indigo-600" title="Analytics Job">
-                        <BarChart3 size={16} />
-                     </div>
-                  ) : (
-                     <div className="w-8 h-8 rounded-lg bg-emerald-100 flex items-center justify-center text-emerald-600" title="Discovery Job">
-                        <Search size={16} />
-                     </div>
-                  )}
+                  <div className="w-8 h-8 rounded-lg bg-emerald-100 flex items-center justify-center text-emerald-600" title="Discovery Job">
+                    <Search size={16} />
+                  </div>
                 </td>
                 <td className="px-6 py-4 text-slate-500 whitespace-nowrap">
                   {new Date(item.date).toLocaleDateString()} <span className="text-slate-300 mx-1">•</span> {new Date(item.date).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
@@ -72,8 +62,8 @@ export const HistoryView: React.FC<HistoryViewProps> = ({ history, onSelectJob, 
                 </td>
                 <td className="px-6 py-4 text-right">
                    <div className="flex flex-col items-end">
-                     <span className="font-medium text-slate-900">{item.resultsCount} {item.type === 'analytics' ? 'Posts' : 'Profiles'}</span>
-                     {item.emailsFound > 0 && item.type === 'discovery' && <span className="text-xs text-emerald-600 font-medium">{item.emailsFound} Emails</span>}
+                     <span className="font-medium text-slate-900">{item.resultsCount} Profiles</span>
+                     {item.emailsFound > 0 && <span className="text-xs text-emerald-600 font-medium">{item.emailsFound} Emails</span>}
                    </div>
                 </td>
                 <td className="px-6 py-4 text-right">

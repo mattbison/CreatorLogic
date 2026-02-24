@@ -332,7 +332,20 @@ export class BackendService {
         job.finalResults = items;
         job.status.status = 'completed';
         job.status.progress = 100;
-        await this.saveHistoryItem({ id: jobId, date: new Date().toISOString(), type: job.type, seedUsername: job.seedUsername, status: 'completed', resultsCount: items.length, emailsFound: items.filter((i:any) => !!i.public_email).length });
+        const followerCount = job.type === 'discovery' 
+          ? items.reduce((acc: number, i: any) => acc + (i.followerCount || 0), 0) / (items.length || 1) // This doesn't make sense for discovery, discovery is a list of users
+          : items[0]?.ownerFollowerCount || items[0]?.owner?.followerCount || 0;
+
+        await this.saveHistoryItem({ 
+          id: jobId, 
+          date: new Date().toISOString(), 
+          type: job.type, 
+          seedUsername: job.seedUsername, 
+          status: 'completed', 
+          resultsCount: items.length, 
+          emailsFound: items.filter((i:any) => !!i.public_email).length,
+          followerCount: followerCount > 0 ? followerCount : undefined
+        });
         
         if (this.useSupabase) {
             await this.supabase.from('search_results').insert({ job_id: jobId, data: items });
