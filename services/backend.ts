@@ -11,6 +11,7 @@ const STORAGE_KEYS = {
   SUPABASE_KEY: 'creatorlogic_sb_key',
   PARTNERSHIPS: 'creatorlogic_partnerships',
   APP_CREDS: 'creatorlogic_app_creds',
+  RESULTS: 'creatorlogic_job_results',
 };
 
 // --- HARDCODED ACTOR CONFIG ---
@@ -276,17 +277,34 @@ export class BackendService {
       } else {
           const newHistory = history.filter(h => h.id !== jobToDelete.id);
           localStorage.setItem(STORAGE_KEYS.HISTORY, JSON.stringify(newHistory));
+          
+          const allResults = JSON.parse(localStorage.getItem(STORAGE_KEYS.RESULTS) || '{}');
+          delete allResults[jobToDelete.id];
+          localStorage.setItem(STORAGE_KEYS.RESULTS, JSON.stringify(allResults));
       }
   }
 
   async checkJobStatus(jobId: string): Promise<{ status: JobStatus; data?: any[] }> {
     const job = jobStore[jobId];
-    if (job) return { status: job.status, data: job.finalResults.length > 0 ? job.finalResults : undefined };
+    if (job && job.finalResults.length > 0) return { status: job.status, data: job.finalResults };
+    
     if (this.useSupabase) {
         const { data: jobData } = await this.supabase.from('search_jobs').select('*').eq('id', jobId).single();
         const { data: resData } = await this.supabase.from('search_results').select('data').eq('job_id', jobId).single();
         return { status: { jobId, status: jobData?.status || 'completed', progress: 100, logs: [], resultCount: jobData?.results_count || 0 }, data: resData?.data || [] };
+    } else {
+        const history = await this.getHistory();
+        const jobData = history.find(h => h.id === jobId);
+        if (jobData && jobData.status === 'completed') {
+            const allResults = JSON.parse(localStorage.getItem(STORAGE_KEYS.RESULTS) || '{}');
+            return { 
+                status: { jobId, status: 'completed', progress: 100, logs: [], resultCount: jobData.resultsCount }, 
+                data: allResults[jobId] || [] 
+            };
+        }
     }
+    
+    if (job) return { status: job.status, data: undefined };
     throw new Error('Job not found.');
   }
 
@@ -315,7 +333,14 @@ export class BackendService {
         job.status.status = 'completed';
         job.status.progress = 100;
         await this.saveHistoryItem({ id: jobId, date: new Date().toISOString(), type: job.type, seedUsername: job.seedUsername, status: 'completed', resultsCount: items.length, emailsFound: items.filter((i:any) => !!i.public_email).length });
-        if (this.useSupabase) await this.supabase.from('search_results').insert({ job_id: jobId, data: items });
+        
+        if (this.useSupabase) {
+            await this.supabase.from('search_results').insert({ job_id: jobId, data: items });
+        } else {
+            const allResults = JSON.parse(localStorage.getItem(STORAGE_KEYS.RESULTS) || '{}');
+            allResults[jobId] = items;
+            localStorage.setItem(STORAGE_KEYS.RESULTS, JSON.stringify(allResults));
+        }
       } else if (['FAILED', 'ABORTED', 'TIMED-OUT'].includes(run.data.status)) {
         job.status.status = 'failed';
       } else {

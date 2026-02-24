@@ -6,11 +6,12 @@ interface ResultsDashboardProps {
   data: Creator[];
   seedUrl: string; // This is actually seedUsername
   onReset: () => void;
+  onOpenCompare?: () => void;
 }
 
 const ITEMS_PER_PAGE = 10;
 
-export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({ data, seedUrl, onReset }) => {
+export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({ data, seedUrl, onReset, onOpenCompare }) => {
   const [filters, setFilters] = useState<SearchFilters>({
     showVerifiedOnly: false,
     hidePrivate: false,
@@ -109,6 +110,16 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({ data, seedUr
           </div>
           
           <div className="flex items-center gap-3">
+             {onOpenCompare && (
+                <button 
+                  onClick={onOpenCompare}
+                  className="flex items-center gap-2 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 px-4 py-2 rounded-lg text-sm font-medium transition-all shadow-sm hover:border-slate-300 group"
+                >
+                  <BarChart3 size={16} className="text-indigo-600" />
+                  Compare
+                </button>
+             )}
+
              <button 
               onClick={onReset}
               className="flex items-center gap-2 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 px-4 py-2 rounded-lg text-sm font-medium transition-all shadow-sm hover:border-slate-300 group"

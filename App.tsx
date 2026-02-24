@@ -333,6 +333,7 @@ function App() {
                  data={results} 
                  seedUrl={seedUsername} 
                  onReset={handleResetSearch} 
+                 onOpenCompare={() => setShowCompare(true)}
                />
              )}
            </div>
@@ -387,6 +388,7 @@ function App() {
                             username={analyticsUsername} 
                             onReset={handleResetAnalytics}
                             onRefresh={handleRefreshAnalytics}
+                            onOpenCompare={() => setShowCompare(true)}
                         />
                     )
                 )}
