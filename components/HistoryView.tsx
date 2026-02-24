@@ -5,10 +5,9 @@ import { Clock, CheckCircle2, XCircle, ArrowRight, Loader2, BarChart3, Search } 
 interface HistoryViewProps {
   history: SearchHistoryItem[];
   onSelectJob: (jobId: string) => void;
-  onOpenCompare: () => void;
 }
 
-export const HistoryView: React.FC<HistoryViewProps> = ({ history, onSelectJob, onOpenCompare }) => {
+export const HistoryView: React.FC<HistoryViewProps> = ({ history, onSelectJob }) => {
   // Filter to only show discovery jobs for "Search History"
   const discoveryHistory = history.filter(h => h.type === 'discovery' || !h.type);
 

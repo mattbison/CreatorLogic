@@ -11,7 +11,6 @@ import { CreatorHistoryView } from './components/CreatorHistoryView';
 import { AnalyticsView } from './components/AnalyticsView';
 import { AgencyDashboard } from './components/AgencyDashboard';
 import { TrackView } from './components/TrackView';
-import { CompareModal } from './components/CompareModal';
 import { JobStatus, Creator, User, SearchHistoryItem, InstagramPost } from './types';
 
 function App() {
@@ -24,7 +23,6 @@ function App() {
 
   // App State
   const [activeTab, setActiveTab] = useState<'search' | 'history' | 'creator-history' | 'analytics' | 'agency' | 'track'>('search');
-  const [showCompare, setShowCompare] = useState(false);
   
   // Search (Discovery) State
   const [seedUsername, setSeedUsername] = useState('');
@@ -334,7 +332,6 @@ function App() {
                  data={results} 
                  seedUrl={seedUsername} 
                  onReset={handleResetSearch} 
-                 onOpenCompare={() => setShowCompare(true)}
                />
              )}
            </div>
@@ -342,7 +339,7 @@ function App() {
 
         {activeTab === 'analytics' && (
             <div className="p-0">
-                {!analyticsResults.length && !analyticsJobId ? (
+                {!analyticsStatus ? (
                     <div className="flex flex-col items-center justify-center min-h-screen bg-slate-50 p-4">
                         <div className="max-w-md w-full bg-white p-8 rounded-2xl shadow-sm border border-slate-200 text-center">
                             <div className="w-16 h-16 bg-indigo-50 rounded-full flex items-center justify-center mx-auto mb-6">
@@ -373,15 +370,9 @@ function App() {
                         </div>
                     </div>
                 ) : (
-                    analyticsJobId && (!analyticsStatus || analyticsStatus.status !== 'completed') ? (
+                    analyticsStatus.status !== 'completed' ? (
                         <TerminalLoader 
-                            status={analyticsStatus || { 
-                                jobId: analyticsJobId, 
-                                status: 'pending', 
-                                progress: 0, 
-                                logs: [], 
-                                resultCount: 0 
-                            }} 
+                            status={analyticsStatus} 
                         />
                     ) : (
                         <AnalyticsView 
@@ -389,7 +380,6 @@ function App() {
                             username={analyticsUsername} 
                             onReset={handleResetAnalytics}
                             onRefresh={handleRefreshAnalytics}
-                            onOpenCompare={() => setShowCompare(true)}
                         />
                     )
                 )}
@@ -401,7 +391,6 @@ function App() {
             <HistoryView 
                 history={history} 
                 onSelectJob={handleSelectHistoryJob} 
-                onOpenCompare={() => setShowCompare(true)}
             />
           </div>
         )}
@@ -423,12 +412,6 @@ function App() {
             <TrackView />
         )}
       </main>
-
-      <CompareModal 
-        isOpen={showCompare} 
-        onClose={() => setShowCompare(false)} 
-        history={history} 
-      />
     </div>
   );
 }

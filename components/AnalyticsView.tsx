@@ -25,12 +25,11 @@ interface AnalyticsViewProps {
   username: string;
   onReset: () => void;
   onRefresh: () => void;
-  onOpenCompare?: () => void;
 }
 
 type SortOption = 'date_desc' | 'date_asc' | 'views_desc' | 'views_asc';
 
-export const AnalyticsView: React.FC<AnalyticsViewProps> = ({ posts, username, onReset, onRefresh, onOpenCompare }) => {
+export const AnalyticsView: React.FC<AnalyticsViewProps> = ({ posts, username, onReset, onRefresh }) => {
   const [costPerPostInput, setCostPerPostInput] = useState<string>('500');
   const [sortOption, setSortOption] = useState<SortOption>('date_desc');
 
@@ -142,17 +141,6 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({ posts, username, o
                     <ArrowUpDown size={16} className="text-slate-400" />
                     <span className="hidden sm:inline">Refresh</span>
                     </button>
-
-                    {onOpenCompare && (
-                        <button 
-                        onClick={onOpenCompare}
-                        className="flex items-center gap-2 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 px-3 py-2 rounded-lg text-sm font-medium transition-all shadow-sm hover:border-slate-300"
-                        title="Compare Creators"
-                        >
-                        <BarChart3 size={16} className="text-indigo-600" />
-                        <span className="hidden sm:inline">Compare</span>
-                        </button>
-                    )}
 
                     <button 
                     onClick={handleExport}

@@ -286,7 +286,7 @@ export class BackendService {
 
   async checkJobStatus(jobId: string): Promise<{ status: JobStatus; data?: any[] }> {
     const job = jobStore[jobId];
-    if (job && job.finalResults.length > 0) return { status: job.status, data: job.finalResults };
+    if (job && job.status.status === 'completed') return { status: job.status, data: job.finalResults || [] };
     
     if (this.useSupabase) {
         const { data: jobData } = await this.supabase.from('search_jobs').select('*').eq('id', jobId).single();
