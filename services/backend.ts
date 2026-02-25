@@ -363,6 +363,12 @@ export class BackendService {
     const job = jobStore[jobId];
     try {
       const actorId = job.type === 'discovery' ? ACTORS.DISCOVERY : ACTORS.ANALYTICS;
+      
+      // Calculate date 100 days ago for Advanced Insights
+      const date = new Date();
+      date.setDate(date.getDate() - 100);
+      const onlyPostsNewerThan = date.toISOString().split('T')[0];
+
       const payload = job.type === 'discovery' 
         ? { 
             username: [job.seedUsername], 
@@ -370,7 +376,15 @@ export class BackendService {
             profileEnriched: true,
             type: "similar_users"
           } 
-        : { usernames: [job.seedUsername], resultsLimit: 10 };
+        : { 
+            username: [job.seedUsername], 
+            resultsLimit: 10,
+            includeDownloadedVideo: false,
+            includeSharesCount: true,
+            includeTranscript: false,
+            onlyPostsNewerThan: onlyPostsNewerThan,
+            skipPinnedPosts: true
+          };
       
       const run = await apifyRequest(`acts/${actorId.replace('/', '~')}/runs`, 'POST', payload);
       job.apifyRunId = run.data.id;
