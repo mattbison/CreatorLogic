@@ -114,15 +114,21 @@ function App() {
       return;
     }
     setError(null);
+    setResults([]);
+    
+    // Set a temporary status to show the loader immediately
+    setJobStatus({ jobId: 'initializing', status: 'pending', progress: 0, logs: ['[System] Preparing search...'], resultCount: 0 });
     
     try {
       const id = await backend.startSearch(seedUsername, maxResults);
       setCurrentJobId(id);
+      setJobStatus({ jobId: id, status: 'pending', progress: 0, logs: ['[System] Initializing Discovery...'], resultCount: 0 });
       setActiveTab('search');
       loadHistory();
     } catch (err) {
       console.error(err);
       setError('Failed to start search service.');
+      setJobStatus(null);
     }
   };
 
@@ -141,12 +147,13 @@ function App() {
       return;
     }
     setError(null);
+    setAnalyticsResults([]);
+    setAnalyticsStatus({ jobId: 'initializing', status: 'pending', progress: 0, logs: ['[System] Preparing analytics...'], resultCount: 0 });
 
     try {
       const id = await backend.startAnalytics(analyticsUsername);
       setAnalyticsJobId(id);
       
-      // Check immediately if cached
       const status = await backend.checkJobStatus(id);
       setAnalyticsStatus(status.status);
       if (status.status.status === 'completed' && status.data) {
@@ -159,6 +166,7 @@ function App() {
     } catch (err) {
       console.error(err);
       setError('Failed to start analytics service.');
+      setAnalyticsStatus(null);
     }
   };
 
@@ -302,7 +310,7 @@ function App() {
       <main className="flex-1 overflow-y-auto relative">
         {activeTab === 'search' && (
            <div className="p-8 max-w-7xl mx-auto">
-             {!results.length && !currentJobId ? (
+             {!jobStatus ? (
                <div className="max-w-2xl mx-auto text-center py-20">
                  <h1 className="text-4xl font-bold text-slate-900 mb-4 tracking-tight">Find Your Next Partner</h1>
                  <p className="text-slate-500 mb-8 text-lg">Discover influencers similar to any account. Enter a username to start scraping.</p>
@@ -328,11 +336,15 @@ function App() {
                  {error && <p className="text-red-500 mt-4 text-sm bg-red-50 inline-block px-4 py-2 rounded-lg">{error}</p>}
                </div>
              ) : (
-               <ResultsDashboard 
-                 data={results} 
-                 seedUrl={seedUsername} 
-                 onReset={handleResetSearch} 
-               />
+               jobStatus.status !== 'completed' ? (
+                 <TerminalLoader status={jobStatus} />
+               ) : (
+                 <ResultsDashboard 
+                   data={results} 
+                   seedUrl={seedUsername} 
+                   onReset={handleResetSearch} 
+                 />
+               )
              )}
            </div>
         )}
