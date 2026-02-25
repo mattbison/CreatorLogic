@@ -17,9 +17,10 @@ export const TerminalLoader: React.FC<TerminalLoaderProps> = ({ status }) => {
 
   // Simplified Steps
   const getStepStatus = (step: string) => {
-    // Only discovery and completed exist now
     if (status.status === 'completed') return 'complete';
-    if (status.status === 'discovery') return 'active';
+    if (step === 'discovery') {
+      return (status.status === 'pending' || status.status === 'discovery') ? 'active' : 'complete';
+    }
     return 'pending';
   };
 

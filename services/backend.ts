@@ -312,13 +312,56 @@ export class BackendService {
     const job = jobStore[jobId];
     try {
       const actorId = job.type === 'discovery' ? ACTORS.DISCOVERY : ACTORS.ANALYTICS;
-      const payload = job.type === 'discovery' ? { username: [job.seedUsername], maxItem: job.limit, type: "similar_users", profileEnriched: true } : { username: [job.seedUsername], resultsLimit: 10, skipPinnedPosts: true };
+      const payload = job.type === 'discovery' 
+        ? { usernames: [job.seedUsername], maxItems: job.limit } 
+        : { usernames: [job.seedUsername], resultsLimit: 10 };
+      
       const run = await apifyRequest(`acts/${actorId.replace('/', '~')}/runs`, 'POST', payload);
       job.apifyRunId = run.data.id;
       this.poll(jobId);
     } catch (e: any) {
       job.status.status = 'failed'; job.status.logs.push(`Error: ${e.message}`);
     }
+  }
+
+  private mapDiscoveryResult(item: any): Creator {
+    return {
+      id: item.id || item.username || Math.random().toString(36).substr(2, 9),
+      username: item.username || '',
+      fullName: item.fullName || '',
+      avatarUrl: item.profilePicUrl || item.profile_pic_url || `https://ui-avatars.com/api/?name=${item.username}`,
+      isVerified: !!(item.verified || item.is_verified),
+      isPrivate: !!(item.isPrivate || item.is_private),
+      isBusiness: !!(item.isBusinessAccount || item.is_business),
+      biography: item.biography || '',
+      externalUrl: item.externalUrl || item.external_url,
+      category: item.categoryName || item.category_name,
+      email: item.publicEmail || item.public_email || item.email,
+      followerCount: item.followersCount || item.follower_count || 0,
+      followingCount: item.followsCount || item.following_count || 0,
+      mediaCount: item.postsCount || item.media_count || 0,
+      link: item.url || item.instagram_url || `https://instagram.com/${item.username}`
+    };
+  }
+
+  private mapAnalyticsResult(item: any): InstagramPost {
+    return {
+      id: item.id || item.shortCode || Math.random().toString(36).substr(2, 9),
+      type: item.type || 'video',
+      shortCode: item.shortCode || '',
+      caption: item.caption || '',
+      hashtags: item.hashtags || [],
+      url: item.url || `https://instagram.com/reel/${item.shortCode}`,
+      commentsCount: item.commentsCount || 0,
+      likesCount: item.likesCount || 0,
+      sharesCount: item.sharesCount || 0,
+      timestamp: item.timestamp || new Date().toISOString(),
+      videoViewCount: item.videoViewCount || 0,
+      videoPlayCount: item.videoPlayCount || 0,
+      videoDuration: item.videoDuration || 0,
+      displayUrl: item.displayUrl || '',
+      musicInfo: item.musicInfo
+    };
   }
 
   private async poll(jobId: string) {
@@ -328,13 +371,19 @@ export class BackendService {
       const actorId = job.type === 'discovery' ? ACTORS.DISCOVERY : ACTORS.ANALYTICS;
       const run = await apifyRequest(`acts/${actorId.replace('/', '~')}/runs/${job.apifyRunId}`);
       if (run.data.status === 'SUCCEEDED') {
-        const items = await apifyRequest(`datasets/${run.data.defaultDatasetId}/items`);
-        job.finalResults = items;
+        const rawItems = await apifyRequest(`datasets/${run.data.defaultDatasetId}/items`);
+        
+        const mappedItems = job.type === 'discovery' 
+          ? rawItems.map((i: any) => this.mapDiscoveryResult(i))
+          : rawItems.map((i: any) => this.mapAnalyticsResult(i));
+
+        job.finalResults = mappedItems;
         job.status.status = 'completed';
         job.status.progress = 100;
+        
         const followerCount = job.type === 'discovery' 
-          ? items.reduce((acc: number, i: any) => acc + (i.followerCount || 0), 0) / (items.length || 1) // This doesn't make sense for discovery, discovery is a list of users
-          : items[0]?.ownerFollowerCount || items[0]?.owner?.followerCount || 0;
+          ? 0 
+          : (rawItems[0]?.ownerFollowerCount || rawItems[0]?.owner?.followerCount || 0);
 
         await this.saveHistoryItem({ 
           id: jobId, 
@@ -342,22 +391,26 @@ export class BackendService {
           type: job.type, 
           seedUsername: job.seedUsername, 
           status: 'completed', 
-          resultsCount: items.length, 
-          emailsFound: items.filter((i:any) => !!i.public_email).length,
+          resultsCount: mappedItems.length, 
+          emailsFound: mappedItems.filter((i:any) => !!i.email).length,
           followerCount: followerCount > 0 ? followerCount : undefined
         });
         
         if (this.useSupabase) {
-            await this.supabase.from('search_results').insert({ job_id: jobId, data: items });
+            await this.supabase.from('search_results').insert({ job_id: jobId, data: mappedItems });
         } else {
             const allResults = JSON.parse(localStorage.getItem(STORAGE_KEYS.RESULTS) || '{}');
-            allResults[jobId] = items;
+            allResults[jobId] = mappedItems;
             localStorage.setItem(STORAGE_KEYS.RESULTS, JSON.stringify(allResults));
         }
       } else if (['FAILED', 'ABORTED', 'TIMED-OUT'].includes(run.data.status)) {
         job.status.status = 'failed';
       } else {
         job.status.progress = Math.min(95, job.status.progress + 5);
+        const statusMsg = `[Apify] Actor is ${run.data.status.toLowerCase()}... (${job.status.progress}%)`;
+        if (!job.status.logs.includes(statusMsg)) {
+            job.status.logs.push(statusMsg);
+        }
         setTimeout(() => this.poll(jobId), 4000);
       }
     } catch (e) { job.status.status = 'failed'; }
