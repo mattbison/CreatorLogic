@@ -11,6 +11,7 @@ interface ResultsDashboardProps {
 const ITEMS_PER_PAGE = 10;
 
 export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({ data, seedUrl, onReset }) => {
+  console.log('[ResultsDashboard] Rendering with data:', data);
   const [filters, setFilters] = useState<SearchFilters>({
     showVerifiedOnly: false,
     hidePrivate: false,
@@ -228,20 +229,20 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({ data, seedUr
                    </tr>
                  </thead>
                  <tbody className="divide-y divide-slate-100">
-                   {paginatedData.map(creator => (
+                   {paginatedData.length > 0 ? paginatedData.map(creator => (
                      <tr key={creator.id} className="hover:bg-slate-50/80 transition-colors group text-sm">
                        <td className="p-4 align-top">
                          <div className="flex items-center gap-3">
                            <div className="w-10 h-10 rounded-full bg-slate-100 overflow-hidden shrink-0 border border-slate-200 relative">
                              <img 
-                              src={creator.avatarUrl} 
-                              alt={creator.username} 
-                              className="w-full h-full object-cover" 
-                              loading="lazy"
-                              referrerPolicy="no-referrer"
-                              onError={(e) => {
-                                (e.target as HTMLImageElement).src = `https://ui-avatars.com/api/?name=${creator.username}&background=random`
-                              }}
+                               src={creator.avatarUrl} 
+                               alt={creator.username} 
+                               className="w-full h-full object-cover" 
+                               loading="lazy"
+                               referrerPolicy="no-referrer"
+                               onError={(e) => {
+                                 (e.target as HTMLImageElement).src = `https://ui-avatars.com/api/?name=${creator.username}&background=random`
+                               }}
                              />
                            </div>
                            <div>
@@ -268,7 +269,7 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({ data, seedUr
                        </td>
 
                        <td className="p-4 align-top">
-                         {creator.followerCount !== undefined ? (
+                         {creator.followerCount !== undefined && creator.followerCount > 0 ? (
                            <div className="font-mono text-slate-700 font-medium">
                              {formatNumber(creator.followerCount)}
                            </div>
@@ -278,7 +279,7 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({ data, seedUr
                        </td>
 
                         <td className="p-4 align-top">
-                         {creator.mediaCount !== undefined ? (
+                         {creator.mediaCount !== undefined && creator.mediaCount > 0 ? (
                            <div className="flex items-center gap-1 text-slate-600 font-mono">
                              <Image size={12} className="text-slate-400"/>
                              {creator.mediaCount}
@@ -288,25 +289,25 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({ data, seedUr
                          )}
                        </td>
 
-                       <td className="p-4 align-top">
-                         {creator.email ? (
-                           <button 
-                             onClick={() => handleCopyEmail(creator.email!)}
-                             className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-200 text-slate-700 rounded-md hover:border-indigo-300 hover:text-indigo-600 transition-all text-xs font-medium shadow-sm active:scale-95"
-                           >
-                             {copiedEmail === creator.email ? (
-                               <span className="text-emerald-600 font-bold">Copied!</span>
-                             ) : (
-                               <>
-                                 <Mail size={12} />
-                                 Email
-                               </>
-                             )}
-                           </button>
-                         ) : (
-                           <span className="text-slate-400 text-xs italic">N/A</span>
-                         )}
-                       </td>
+                        <td className="p-4 align-top">
+                          {creator.email ? (
+                            <button 
+                              onClick={() => handleCopyEmail(creator.email!)}
+                              className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-200 text-slate-700 rounded-md hover:border-indigo-300 hover:text-indigo-600 transition-all text-xs font-medium shadow-sm active:scale-95"
+                            >
+                              {copiedEmail === creator.email ? (
+                                <span className="text-emerald-600 font-bold">Copied!</span>
+                              ) : (
+                                <>
+                                  <Mail size={12} />
+                                  Email
+                                </>
+                              )}
+                            </button>
+                          ) : (
+                            <span className="text-slate-400 text-xs italic">Undisclosed</span>
+                          )}
+                        </td>
 
                        <td className="p-4 text-right align-top">
                          <a 
@@ -319,11 +320,14 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({ data, seedUr
                          </a>
                        </td>
                      </tr>
-                   ))}
-                   {paginatedData.length === 0 && (
+                   )) : (
                      <tr>
-                       <td colSpan={6} className="p-12 text-center text-slate-500">
-                         No creators found matching these filters.
+                       <td colSpan={6} className="p-12 text-center">
+                         <div className="flex flex-col items-center justify-center text-slate-400">
+                           <Search size={48} className="mb-4 opacity-20" />
+                           <h3 className="text-lg font-medium text-slate-900 mb-1">No creators found</h3>
+                           <p className="text-sm">Try adjusting your filters or search for a different account.</p>
+                         </div>
                        </td>
                      </tr>
                    )}

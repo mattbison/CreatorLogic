@@ -65,6 +65,17 @@ const apifyRequest = async (path: string, method: string = 'GET', body?: any) =>
   return response.json();
 };
 
+const apifyRequestText = async (path: string) => {
+  const token = getEnvVar('VITE_APIFY_TOKEN');
+  if (!token) throw new Error('VITE_APIFY_TOKEN is missing.');
+
+  const response = await fetch(`https://api.apify.com/v2/${path}`, {
+    headers: { 'Authorization': `Bearer ${token}` },
+  });
+  if (!response.ok) return '';
+  return response.text();
+};
+
 // --- URL HELPERS ---
 const getShortCode = (url: string) => {
     try {
@@ -179,21 +190,36 @@ export class BackendService {
 
   // --- WORKFLOWS ---
   async getHistory(): Promise<SearchHistoryItem[]> {
-    if (this.useSupabase) {
-      const { data, error } = await this.supabase.from('search_jobs').select('*').order('created_at', { ascending: false });
-      if (error) return [];
-      return data.map((d: any) => ({
-        id: d.id,
-        date: d.created_at,
-        type: d.type || 'discovery',
-        seedUsername: d.seed_username,
-        status: d.status,
-        resultsCount: d.results_count,
-        emailsFound: d.emails_found
-      }));
-    }
     const raw = localStorage.getItem(STORAGE_KEYS.HISTORY);
-    return raw ? JSON.parse(raw) : [];
+    const localHistory = raw ? JSON.parse(raw) : [];
+
+    if (this.useSupabase) {
+      try {
+        const { data, error } = await this.supabase.from('search_jobs').select('*').order('created_at', { ascending: false });
+        if (!error && data) {
+          const sbHistory = data.map((d: any) => ({
+            id: d.id,
+            date: d.created_at,
+            type: d.type || 'discovery',
+            seedUsername: d.seed_username,
+            status: d.status,
+            resultsCount: d.results_count,
+            emailsFound: d.emails_found
+          }));
+          // Merge logic: local is usually more up-to-date for current session
+          const merged = [...localHistory];
+          sbHistory.forEach((item: any) => {
+            if (!merged.find(m => m.id === item.id)) {
+              merged.push(item);
+            }
+          });
+          return merged.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+        }
+      } catch (e) {
+        console.warn('[Backend] Supabase history fetch failed, using local only.');
+      }
+    }
+    return localHistory;
   }
 
   async getAgencyHistory(): Promise<SearchHistoryItem[]> {
@@ -201,22 +227,29 @@ export class BackendService {
   }
 
   private async saveHistoryItem(item: SearchHistoryItem) {
+    // ALWAYS save to localStorage first
+    const current = await this.getHistory();
+    const newHistory = [item, ...current.filter(i => i.id !== item.id)];
+    localStorage.setItem(STORAGE_KEYS.HISTORY, JSON.stringify(newHistory));
+
     if (this.useSupabase) {
-      const { data: userData } = await this.supabase.auth.getUser();
-      if (!userData?.user) return;
-      await this.supabase.from('search_jobs').upsert({
-        id: item.id,
-        user_id: userData.user.id,
-        type: item.type,
-        seed_username: item.seedUsername,
-        status: item.status,
-        results_count: item.resultsCount,
-        emails_found: item.emailsFound,
-        created_at: item.date
-      });
-    } else {
-      const current = await this.getHistory();
-      localStorage.setItem(STORAGE_KEYS.HISTORY, JSON.stringify([item, ...current.filter(i => i.id !== item.id)]));
+      try {
+        const { data: userData } = await this.supabase.auth.getUser();
+        if (userData?.user) {
+          await this.supabase.from('search_jobs').upsert({
+            id: item.id,
+            user_id: userData.user.id,
+            type: item.type,
+            seed_username: item.seedUsername,
+            status: item.status,
+            results_count: item.resultsCount,
+            emails_found: item.emailsFound,
+            created_at: item.date
+          });
+        }
+      } catch (e) {
+        console.warn('[Backend] Supabase history sync failed.');
+      }
     }
   }
 
@@ -285,26 +318,44 @@ export class BackendService {
   }
 
   async checkJobStatus(jobId: string): Promise<{ status: JobStatus; data?: any[] }> {
+    // 1. Check active job store first (Priority)
     const job = jobStore[jobId];
-    if (job && job.status.status === 'completed') return { status: job.status, data: job.finalResults || [] };
+    if (job) {
+        if (job.status.status === 'completed') {
+            return { status: job.status, data: job.finalResults || [] };
+        }
+        return { status: job.status, data: undefined };
+    }
     
-    if (this.useSupabase) {
-        const { data: jobData } = await this.supabase.from('search_jobs').select('*').eq('id', jobId).single();
-        const { data: resData } = await this.supabase.from('search_results').select('data').eq('job_id', jobId).single();
-        return { status: { jobId, status: jobData?.status || 'completed', progress: 100, logs: [], resultCount: jobData?.results_count || 0 }, data: resData?.data || [] };
-    } else {
-        const history = await this.getHistory();
-        const jobData = history.find(h => h.id === jobId);
-        if (jobData && jobData.status === 'completed') {
-            const allResults = JSON.parse(localStorage.getItem(STORAGE_KEYS.RESULTS) || '{}');
+    // 2. Check localStorage (Secondary)
+    const history = await this.getHistory();
+    const jobData = history.find(h => h.id === jobId);
+    if (jobData && jobData.status === 'completed') {
+        const allResults = JSON.parse(localStorage.getItem(STORAGE_KEYS.RESULTS) || '{}');
+        if (allResults[jobId]) {
             return { 
                 status: { jobId, status: 'completed', progress: 100, logs: [], resultCount: jobData.resultsCount }, 
-                data: allResults[jobId] || [] 
+                data: allResults[jobId] 
             };
         }
     }
+
+    // 3. Check Supabase (Tertiary)
+    if (this.useSupabase) {
+        try {
+            const { data: sbJob } = await this.supabase.from('search_jobs').select('*').eq('id', jobId).single();
+            if (sbJob) {
+                const { data: sbRes } = await this.supabase.from('search_results').select('data').eq('job_id', jobId).single();
+                return { 
+                    status: { jobId, status: sbJob.status, progress: 100, logs: [], resultCount: sbJob.results_count }, 
+                    data: sbRes?.data || [] 
+                };
+            }
+        } catch (e) {
+            console.warn('[Backend] Supabase job check failed.');
+        }
+    }
     
-    if (job) return { status: job.status, data: undefined };
     throw new Error('Job not found.');
   }
 
@@ -313,7 +364,12 @@ export class BackendService {
     try {
       const actorId = job.type === 'discovery' ? ACTORS.DISCOVERY : ACTORS.ANALYTICS;
       const payload = job.type === 'discovery' 
-        ? { usernames: [job.seedUsername], maxItems: job.limit } 
+        ? { 
+            username: [job.seedUsername], 
+            maxItem: job.limit,
+            profileEnriched: true,
+            type: "similar_users"
+          } 
         : { usernames: [job.seedUsername], resultsLimit: 10 };
       
       const run = await apifyRequest(`acts/${actorId.replace('/', '~')}/runs`, 'POST', payload);
@@ -325,153 +381,220 @@ export class BackendService {
   }
 
   private mapDiscoveryResult(item: any): Creator {
+    // ACCURATE mapping based on provided JSON example
+    const username = item.username || item.user_name || '';
+    const fullName = item.full_name || item.fullName || '';
+    
+    // STRICTLY use public_email as requested
+    const email = (item.public_email || '').toString().trim();
+
+    // Smart follower count parsing from label if missing (e.g. "35.7k followers")
+    let followerCount = item.follower_count || item.followersCount || 0;
+    const label = item.profile_chaining_secondary_label || item.social_context || '';
+    if (!followerCount && label.toLowerCase().includes('follower')) {
+        const match = label.match(/([0-9.]+)([kM]?)/i);
+        if (match) {
+            let val = parseFloat(match[1]);
+            const unit = match[2].toLowerCase();
+            if (unit === 'k') val *= 1000;
+            if (unit === 'm') val *= 1000000;
+            followerCount = Math.round(val);
+        }
+    }
+
     return {
-      id: item.id || item.username || Math.random().toString(36).substr(2, 9),
-      username: item.username || '',
-      fullName: item.fullName || '',
-      avatarUrl: item.profilePicUrl || item.profile_pic_url || `https://ui-avatars.com/api/?name=${item.username}`,
-      isVerified: !!(item.verified || item.is_verified),
-      isPrivate: !!(item.isPrivate || item.is_private),
-      isBusiness: !!(item.isBusinessAccount || item.is_business),
-      biography: item.biography || '',
-      externalUrl: item.externalUrl || item.external_url,
-      category: item.categoryName || item.category_name,
-      email: item.publicEmail || item.public_email || item.email,
-      followerCount: item.followersCount || item.follower_count || 0,
-      followingCount: item.followsCount || item.following_count || 0,
-      mediaCount: item.postsCount || item.media_count || 0,
-      link: item.url || item.instagram_url || `https://instagram.com/${item.username}`
+      id: item.id || item.pk || item.strong_id__ || username || Math.random().toString(36).substr(2, 9),
+      username: username,
+      fullName: fullName,
+      avatarUrl: item.profile_pic_url || item.profilePicUrl || `https://ui-avatars.com/api/?name=${username}`,
+      isVerified: !!(item.is_verified || item.verified),
+      isPrivate: !!(item.is_private || item.isPrivate),
+      isBusiness: !!(item.is_business || item.is_professional_account || item.isBusinessAccount),
+      biography: item.social_context || item.profile_chaining_secondary_label || item.biography || '', 
+      externalUrl: item.external_url || item.externalUrl,
+      category: item.category_name || item.category || item.business_category_name || item.categoryName,
+      email: email,
+      followerCount: followerCount,
+      followingCount: item.following_count || item.followsCount || 0,
+      mediaCount: item.media_count || item.postsCount || 0,
+      link: `https://instagram.com/${username}`
     };
   }
 
   private mapAnalyticsResult(item: any): InstagramPost {
     return {
-      id: item.id || item.shortCode || Math.random().toString(36).substr(2, 9),
+      id: item.id || item.shortCode || item.shortcode || Math.random().toString(36).substr(2, 9),
       type: item.type || 'video',
-      shortCode: item.shortCode || '',
+      shortCode: item.shortCode || item.shortcode || '',
       caption: item.caption || '',
       hashtags: item.hashtags || [],
-      url: item.url || `https://instagram.com/reel/${item.shortCode}`,
-      commentsCount: item.commentsCount || 0,
-      likesCount: item.likesCount || 0,
-      sharesCount: item.sharesCount || 0,
-      timestamp: item.timestamp || new Date().toISOString(),
-      videoViewCount: item.videoViewCount || 0,
-      videoPlayCount: item.videoPlayCount || 0,
-      videoDuration: item.videoDuration || 0,
-      displayUrl: item.displayUrl || '',
-      musicInfo: item.musicInfo
+      url: item.url || `https://instagram.com/reel/${item.shortCode || item.shortcode}`,
+      commentsCount: item.commentsCount || item.comments_count || 0,
+      likesCount: item.likesCount || item.likes_count || 0,
+      sharesCount: item.sharesCount || item.shares_count || 0,
+      timestamp: item.timestamp || item.taken_at || new Date().toISOString(),
+      videoViewCount: item.videoViewCount || item.video_view_count || 0,
+      videoPlayCount: item.videoPlayCount || item.video_play_count || 0,
+      videoDuration: item.videoDuration || item.video_duration || 0,
+      displayUrl: item.displayUrl || item.display_url || '',
+      musicInfo: item.musicInfo || item.music_info
     };
+  }
+
+  private async fetchApifyLogs(runId: string): Promise<string[]> {
+    try {
+      const logText = await apifyRequestText(`actor-runs/${runId}/log`);
+      if (!logText) return [];
+      // Get last 15 lines of log
+      return logText.split('\n').filter(l => !!l.trim()).slice(-15);
+    } catch { return []; }
   }
 
   private async poll(jobId: string) {
     const job = jobStore[jobId];
-    if (!job.apifyRunId) return;
+    if (!job || !job.apifyRunId) return;
+    
     try {
       const actorId = job.type === 'discovery' ? ACTORS.DISCOVERY : ACTORS.ANALYTICS;
       const run = await apifyRequest(`acts/${actorId.replace('/', '~')}/runs/${job.apifyRunId}`);
+      
+      // Update logs from Apify
+      const realLogs = await this.fetchApifyLogs(job.apifyRunId);
+      if (realLogs.length > 0) job.status.logs = realLogs;
+
       if (run.data.status === 'SUCCEEDED') {
+        job.status.logs.push('[System] Run succeeded. Downloading data...');
         const rawItems = await apifyRequest(`datasets/${run.data.defaultDatasetId}/items`);
         
-        const mappedItems = job.type === 'discovery' 
-          ? rawItems.map((i: any) => this.mapDiscoveryResult(i))
-          : rawItems.map((i: any) => this.mapAnalyticsResult(i));
+        if (!Array.isArray(rawItems)) {
+            job.status.logs.push('[Error] Data format mismatch.');
+            job.status.status = 'failed';
+            return;
+        }
 
+        const mappedItems = rawItems.map((item: any) => {
+          // Handle potential wrapping by some actors
+          const u = item.user || item.node || item;
+          return job.type === 'discovery' ? this.mapDiscoveryResult(u) : this.mapAnalyticsResult(u);
+        }).filter(c => !!(c as any).username || !!(c as any).shortCode);
+
+        // Set data IMMEDIATELY
         job.finalResults = mappedItems;
-        job.status.status = 'completed';
+        job.status.resultCount = mappedItems.length;
         job.status.progress = 100;
-        
-        const followerCount = job.type === 'discovery' 
-          ? 0 
-          : (rawItems[0]?.ownerFollowerCount || rawItems[0]?.owner?.followerCount || 0);
+        job.status.logs.push(`[System] Captured ${mappedItems.length} results.`);
 
-        await this.saveHistoryItem({ 
-          id: jobId, 
-          date: new Date().toISOString(), 
-          type: job.type, 
-          seedUsername: job.seedUsername, 
-          status: 'completed', 
-          resultsCount: mappedItems.length, 
-          emailsFound: mappedItems.filter((i:any) => !!i.email).length,
-          followerCount: followerCount > 0 ? followerCount : undefined
-        });
-        
-        if (this.useSupabase) {
-            await this.supabase.from('search_results').insert({ job_id: jobId, data: mappedItems });
-        } else {
+        // Finalize with a small delay
+        setTimeout(async () => {
+            job.status.status = 'completed';
+            
+            const followerCount = job.type === 'discovery' ? 0 : (rawItems[0]?.ownerFollowerCount || 0);
+            const historyItem: SearchHistoryItem = { 
+              id: jobId, date: new Date().toISOString(), type: job.type, 
+              seedUsername: job.seedUsername, status: 'completed', 
+              resultsCount: mappedItems.length, 
+              emailsFound: mappedItems.filter((i:any) => !!i.email).length,
+              followerCount: followerCount > 0 ? followerCount : undefined
+            };
+
+            await this.saveHistoryItem(historyItem);
+            
+            // Save results to localStorage
             const allResults = JSON.parse(localStorage.getItem(STORAGE_KEYS.RESULTS) || '{}');
             allResults[jobId] = mappedItems;
             localStorage.setItem(STORAGE_KEYS.RESULTS, JSON.stringify(allResults));
-        }
+
+            // Sync results to Supabase if available
+            if (this.useSupabase) {
+                try {
+                    await this.supabase.from('search_results').upsert({ job_id: jobId, data: mappedItems });
+                } catch (e) {
+                    console.warn('[Backend] Supabase results sync failed.');
+                }
+            }
+        }, 1000);
+
       } else if (['FAILED', 'ABORTED', 'TIMED-OUT'].includes(run.data.status)) {
         job.status.status = 'failed';
+        job.status.logs.push(`[Error] Apify run failed: ${run.data.status}`);
       } else {
-        job.status.progress = Math.min(95, job.status.progress + 5);
-        const statusMsg = `[Apify] Actor is ${run.data.status.toLowerCase()}... (${job.status.progress}%)`;
-        if (!job.status.logs.includes(statusMsg)) {
-            job.status.logs.push(statusMsg);
-        }
+        job.status.progress = Math.min(95, job.status.progress + 2);
         setTimeout(() => this.poll(jobId), 4000);
       }
-    } catch (e) { job.status.status = 'failed'; }
+    } catch (e: any) { 
+        job.status.status = 'failed'; 
+        job.status.logs.push(`[Error] System error: ${e.message}`);
+    }
   }
 
   // --- PARTNERSHIPS & TRACKING ---
 
   async getPartnerships(): Promise<Partnership[]> {
     // 1. Return in-memory cache if available (Fastest UI updates)
-    if (this._partnershipsCache) {
-      return this._partnershipsCache;
-    }
+    if (this._partnershipsCache) return this._partnershipsCache;
 
-    // 2. Fetch from DB or Local Storage
-    let data: Partnership[] = [];
+    // 2. Fetch from Local Storage (Primary)
+    const raw = localStorage.getItem(STORAGE_KEYS.PARTNERSHIPS);
+    let data: Partnership[] = raw ? JSON.parse(raw) : [];
+
+    // 3. Fetch from Supabase (Secondary Sync)
     if (this.useSupabase) {
-        const { data: dbData } = await this.supabase.from('partnerships').select('*').order('postedDate', { ascending: false });
-        data = dbData || [];
-    } else {
-        const raw = localStorage.getItem(STORAGE_KEYS.PARTNERSHIPS);
-        data = raw ? JSON.parse(raw) : [];
+      try {
+        const { data: dbData, error } = await this.supabase.from('partnerships').select('*').order('postedDate', { ascending: false });
+        if (!error && dbData) {
+          // Merge logic
+          const merged = [...data];
+          dbData.forEach((item: any) => {
+            if (!merged.find(m => m.id === item.id)) merged.push(item);
+          });
+          data = merged.sort((a, b) => new Date(b.postedDate).getTime() - new Date(a.postedDate).getTime());
+        }
+      } catch (e) {
+        console.warn('[Backend] Supabase partnerships fetch failed.');
+      }
     }
     
-    // 3. Populate Cache
     this._partnershipsCache = data;
     return data;
   }
 
   async savePartnership(p: Partnership): Promise<Partnership[]> {
-    // Update local cache immediately
+    // 1. Update local cache and localStorage immediately (Primary)
     const current = await this.getPartnerships();
-    // Add to top of list
     const updated = [p, ...current.filter(i => i.id !== p.id)];
     this._partnershipsCache = updated;
-
-    // Persist in background
-    if (this.useSupabase) {
-         try {
-             const { data: userData } = await this.supabase.auth.getUser();
-             if (userData?.user) {
-                 await this.supabase.from('partnerships').upsert({
-                     ...p,
-                     user_id: userData.user.id
-                 });
-             }
-         } catch(e) { console.log('Supabase table missing') }
-    }
     localStorage.setItem(STORAGE_KEYS.PARTNERSHIPS, JSON.stringify(updated));
-    
+
+    // 2. Persist to Supabase in background (Secondary Sync)
+    if (this.useSupabase) {
+      try {
+        const { data: userData } = await this.supabase.auth.getUser();
+        if (userData?.user) {
+          await this.supabase.from('partnerships').upsert({
+            ...p,
+            user_id: userData.user.id
+          });
+        }
+      } catch (e) {
+        console.warn('[Backend] Supabase partnership sync failed.');
+      }
+    }
     return updated;
   }
 
   async getAppCredentials(): Promise<AppStoreCredentials | null> {
-    if (this.useSupabase) {
-        try {
-            const { data } = await this.supabase.from('app_store_creds').select('*').single();
-            if (data) return data;
-        } catch (e) {}
-    }
+    // 1. Check Local Storage (Primary)
     const raw = localStorage.getItem(STORAGE_KEYS.APP_CREDS);
-    return raw ? JSON.parse(raw) : null;
+    const localCreds = raw ? JSON.parse(raw) : null;
+
+    // 2. Sync from Supabase (Secondary)
+    if (this.useSupabase) {
+      try {
+        const { data } = await this.supabase.from('app_store_creds').select('*').single();
+        if (data) return data;
+      } catch (e) {}
+    }
+    return localCreds;
   }
 
   async saveAppCredentials(creds: AppStoreCredentials) {

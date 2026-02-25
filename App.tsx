@@ -243,11 +243,16 @@ function App() {
       const interval = setInterval(() => {
         backend.checkJobStatus(currentJobId).then(res => {
           setJobStatus(res.status);
-          if (res.status.status === 'completed' && res.data) {
-            setResults(res.data);
+          if (res.status.status === 'completed') {
+            console.log(`[App] Job ${currentJobId} COMPLETED. Data received:`, res.data);
+            if (!res.data || res.data.length === 0) {
+              console.warn(`[App] Job completed but data is empty!`);
+            }
+            setResults(res.data || []);
             setCurrentJobId(null);
             loadHistory();
           } else if (res.status.status === 'failed') {
+            console.error(`[App] Job ${currentJobId} FAILED.`);
             setCurrentJobId(null);
           }
         });
@@ -315,8 +320,8 @@ function App() {
                  <h1 className="text-4xl font-bold text-slate-900 mb-4 tracking-tight">Find Your Next Partner</h1>
                  <p className="text-slate-500 mb-8 text-lg">Discover influencers similar to any account. Enter a username to start scraping.</p>
                  
-                 <form onSubmit={handleSearch} className="relative max-w-md mx-auto">
-                    <div className="flex items-center bg-white border border-slate-200 rounded-xl shadow-sm focus-within:ring-2 focus-within:ring-indigo-500 transition-all overflow-hidden">
+                 <form onSubmit={handleSearch} className="max-w-md mx-auto">
+                    <div className="relative flex items-center bg-white border border-slate-200 rounded-xl shadow-sm focus-within:ring-2 focus-within:ring-indigo-500 transition-all overflow-hidden mb-4">
                       <span className="pl-4 text-slate-400 font-bold text-lg select-none">@</span>
                       <input
                         type="text"
@@ -325,13 +330,33 @@ function App() {
                         placeholder="hormozi"
                         className="flex-1 pl-1 pr-32 py-4 outline-none text-lg"
                       />
+                      <button 
+                        type="submit"
+                        className="absolute right-2 top-2 bottom-2 bg-indigo-600 hover:bg-indigo-700 text-white px-6 rounded-lg font-medium transition-colors flex items-center gap-2"
+                      >
+                        Search <ArrowRight size={18} />
+                      </button>
                     </div>
-                    <button 
-                      type="submit"
-                      className="absolute right-2 top-2 bottom-2 bg-indigo-600 hover:bg-indigo-700 text-white px-6 rounded-lg font-medium transition-colors flex items-center gap-2"
-                    >
-                      Search <ArrowRight size={18} />
-                    </button>
+                    
+                    <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm mb-4">
+                      <div className="flex justify-between mb-2">
+                        <label className="text-sm font-medium text-slate-700">Max Results</label>
+                        <span className="text-sm font-bold text-indigo-600">{maxResults}</span>
+                      </div>
+                      <input 
+                        type="range" 
+                        min="10" 
+                        max="100" 
+                        step="10" 
+                        value={maxResults} 
+                        onChange={(e) => setMaxResults(parseInt(e.target.value))}
+                        className="w-full h-2 bg-slate-100 rounded-lg appearance-none cursor-pointer accent-indigo-600"
+                      />
+                      <div className="flex justify-between mt-1">
+                        <span className="text-[10px] text-slate-400">10</span>
+                        <span className="text-[10px] text-slate-400">100</span>
+                      </div>
+                    </div>
                  </form>
                  {error && <p className="text-red-500 mt-4 text-sm bg-red-50 inline-block px-4 py-2 rounded-lg">{error}</p>}
                </div>
@@ -359,8 +384,7 @@ function App() {
                             </div>
                             <h2 className="text-2xl font-bold text-slate-900 mb-2">Deep Dive Analytics</h2>
                             <p className="text-slate-500 mb-8">Get detailed performance metrics, engagement rates, and deal value estimates for any creator.</p>
-                            
-                            <form onSubmit={handleStartAnalytics}>
+                                                        <form onSubmit={handleStartAnalytics}>
                                 <div className="flex items-center bg-white border border-slate-200 rounded-xl shadow-sm focus-within:ring-2 focus-within:ring-indigo-500 transition-all overflow-hidden">
                                     <span className="pl-4 text-slate-400 font-bold text-lg select-none">@</span>
                                     <input
